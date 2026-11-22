@@ -1,0 +1,3405 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>工事写真台帳・工事台帳管理システム（クラウド同期対応版）</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style id="dynamic-ledger-print-style">@page { size: A4 portrait; margin: 0mm; }</style>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", sans-serif;
+      background-color: #1e293b;
+      color: #0f172a;
+      margin: 0;
+      padding: 0;
+    }
+
+    /* A4縦 / A4横 / A3縦 / A3横 台帳シート（画面プレビュー時） */
+    .a4-ledger-sheet {
+      width: 210mm;
+      max-width: 100%;
+      min-height: 297mm;
+      background: #ffffff;
+      margin: 0 auto 20px auto;
+      padding: 12mm 13mm;
+      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.38);
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    .a4-landscape-ledger-sheet {
+      width: 297mm;
+      max-width: 100%;
+      min-height: 210mm;
+      background: #ffffff;
+      margin: 0 auto 20px auto;
+      padding: 10mm 12mm;
+      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.38);
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    .a3-ledger-sheet {
+      width: 297mm;
+      max-width: 100%;
+      min-height: 420mm;
+      background: #ffffff;
+      margin: 0 auto 20px auto;
+      padding: 14mm 15mm;
+      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.38);
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    .a3-landscape-ledger-sheet {
+      width: 420mm;
+      max-width: 100%;
+      min-height: 297mm;
+      background: #ffffff;
+      margin: 0 auto 20px auto;
+      padding: 12mm 14mm;
+      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.38);
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    /* 野帳サイズ（91×165mm） ＆ 野帳見開きサイズ（182×165mm） シート */
+    .yaecho-single-ledger-sheet {
+      width: 91mm;
+      max-width: 100%;
+      min-height: 165mm;
+      background: #fffef7;
+      margin: 0 auto 20px auto;
+      padding: 5mm 5mm;
+      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.38);
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    .yaecho-spread-ledger-sheet {
+      width: 182mm;
+      max-width: 100%;
+      min-height: 165mm;
+      background: #fffef7;
+      margin: 0 auto 20px auto;
+      padding: 5mm 6mm;
+      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.38);
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    /* ファイル綴じ穴あけ用スペース（左綴じ / 上綴じ +18mm） */
+    .bind-margin-left {
+      padding-left: 26mm !important;
+    }
+    .bind-margin-top {
+      padding-top: 24mm !important;
+    }
+
+    /* 測量野帳（レベルブック）方眼スタイル */
+    .yaecho-ledger-grid {
+      background-color: #fffef7;
+      background-image:
+        linear-gradient(to right, rgba(16, 185, 129, 0.20) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(16, 185, 129, 0.20) 1px, transparent 1px);
+      background-size: 16px 16px;
+    }
+    .yaecho-center-crease {
+      background: linear-gradient(to right, transparent, rgba(15, 23, 42, 0.09) 50%, transparent);
+    }
+
+    /* 電子小黒板4スタイル */
+    .chalkboard-green_classic {
+      background-color: #14532d;
+      border: 2px solid #b45309;
+      color: #f8fafc;
+    }
+    .chalkboard-dark_slate {
+      background-color: #1e293b;
+      border: 2px solid #94a3b8;
+      color: #ffffff;
+    }
+    .chalkboard-white_board {
+      background-color: rgba(255, 255, 255, 0.96);
+      border: 2px solid #1d4ed8;
+      color: #0f172a;
+    }
+    .chalkboard-compact_stamp {
+      background-color: rgba(6, 78, 59, 0.92);
+      border: 1.5px solid #fbbf24;
+      color: #ffffff;
+    }
+
+    /* A4 / A3 印刷・PDF出力専用スタイル（ツールバー非表示・自動改ページ） */
+    @media print {
+      html, body {
+        background: #ffffff !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+      .no-print {
+        display: none !important;
+      }
+      #ledger-scroll-area {
+        overflow: visible !important;
+        padding: 0 !important;
+        background: #ffffff !important;
+        display: block !important;
+      }
+      .a4-ledger-sheet {
+        width: 210mm !important;
+        max-width: 210mm !important;
+        min-height: 297mm !important;
+        height: 297mm !important;
+        margin: 0 auto !important;
+        padding: 11mm 12mm !important;
+        box-shadow: none !important;
+        page-break-after: always;
+        break-after: page;
+        overflow: hidden !important;
+      }
+      .a4-landscape-ledger-sheet {
+        width: 297mm !important;
+        max-width: 297mm !important;
+        min-height: 210mm !important;
+        height: 210mm !important;
+        margin: 0 auto !important;
+        padding: 9mm 11mm !important;
+        box-shadow: none !important;
+        page-break-after: always;
+        break-after: page;
+        overflow: hidden !important;
+      }
+      .a3-ledger-sheet {
+        width: 297mm !important;
+        max-width: 297mm !important;
+        min-height: 420mm !important;
+        height: 420mm !important;
+        margin: 0 auto !important;
+        padding: 13mm 14mm !important;
+        box-shadow: none !important;
+        page-break-after: always;
+        break-after: page;
+        overflow: hidden !important;
+      }
+      .a3-landscape-ledger-sheet {
+        width: 420mm !important;
+        max-width: 420mm !important;
+        min-height: 297mm !important;
+        height: 297mm !important;
+        margin: 0 auto !important;
+        padding: 11mm 13mm !important;
+        box-shadow: none !important;
+        page-break-after: always;
+        break-after: page;
+        overflow: hidden !important;
+      }
+      .yaecho-single-ledger-sheet {
+        width: 91mm !important;
+        max-width: 91mm !important;
+        min-height: 165mm !important;
+        height: 165mm !important;
+        margin: 0 auto !important;
+        padding: 4.5mm 4.5mm !important;
+        box-shadow: none !important;
+        page-break-after: always;
+        break-after: page;
+        overflow: hidden !important;
+      }
+      .yaecho-spread-ledger-sheet {
+        width: 182mm !important;
+        max-width: 182mm !important;
+        min-height: 165mm !important;
+        height: 165mm !important;
+        margin: 0 auto !important;
+        padding: 4.5mm 5.5mm !important;
+        box-shadow: none !important;
+        page-break-after: always;
+        break-after: page;
+        overflow: hidden !important;
+      }
+      .a4-ledger-sheet:last-child,
+      .a4-landscape-ledger-sheet:last-child,
+      .a3-ledger-sheet:last-child,
+      .a3-landscape-ledger-sheet:last-child,
+      .yaecho-single-ledger-sheet:last-child,
+      .yaecho-spread-ledger-sheet:last-child {
+        page-break-after: auto;
+        break-after: auto;
+      }
+      .bind-margin-left {
+        padding-left: 25mm !important;
+      }
+      .bind-margin-top {
+        padding-top: 23mm !important;
+      }
+      input, textarea, select {
+        border-color: transparent !important;
+        background: transparent !important;
+        resize: none !important;
+      }
+      .no-print-textarea {
+        display: none !important;
+      }
+      .print-only-memo {
+        display: block !important;
+        white-space: pre-wrap !important;
+        word-break: break-word !important;
+      }
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+  <!-- ==================== 1. トップヘッダー（プロジェクト切替・クラウド同期・自動保存・印刷） ==================== -->
+  <header class="no-print sticky top-0 z-40 bg-slate-900 text-white border-b border-slate-800 px-3 py-2 shadow-lg">
+    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
+      <!-- 左：台帳プロジェクト切替 ＆ 自動保存ON/OFFオプション -->
+      <div class="flex flex-wrap items-center gap-2 min-w-0">
+        <button onclick="openProjectModal()" class="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 border-l-4 border-amber-500 border border-slate-700 px-2.5 py-1.5 rounded-lg min-w-0 max-w-[190px] sm:max-w-[240px] cursor-pointer" title="現場・台帳プロジェクトを切り替え・新規作成">
+          <span class="text-base shrink-0">📷</span>
+          <span id="header-project-name" class="font-extrabold text-xs sm:text-sm truncate">○○新築工事 工事写真台帳</span>
+          <span class="text-[10px] text-amber-300 font-bold shrink-0">▾</span>
+        </button>
+
+        <!-- 自動保存 ON/OFF オプション ＋ 手動保存ボタン -->
+        <div class="inline-flex items-center gap-1.5 bg-slate-800/90 border border-slate-700 px-2 py-1 rounded-lg text-[11px]">
+          <label class="inline-flex items-center gap-1 font-bold cursor-pointer select-none" title="編集内容を端末内へ自動保存するかどうかを切り替えます">
+            <input id="chk-autosave" type="checkbox" checked onchange="toggleAutoSave(this.checked)" class="accent-emerald-500 cursor-pointer" />
+            <span id="autosave-status" class="text-emerald-300 font-bold whitespace-nowrap">● 自動保存: ON</span>
+          </label>
+          <button id="btn-manual-save" onclick="manualSaveNow()" class="px-2 py-0.5 bg-emerald-700 hover:bg-emerald-600 text-white rounded font-extrabold text-[10px] cursor-pointer whitespace-nowrap" title="現在の台帳状態を今すぐ端末へ保存します">
+            💾 保存
+          </button>
+        </div>
+      </div>
+
+      <!-- 右：クラウド同期・写真一括追加・JSON保存/読込・Discord・A4/A3印刷/PDF -->
+      <div class="flex flex-wrap items-center gap-1.5 text-xs font-bold">
+        <button id="btn-embed-return" onclick="sendLedgerToHostApp()" class="hidden bg-teal-600 hover:bg-teal-500 active:scale-95 text-white px-2.5 py-1.5 rounded-lg items-center gap-1 shadow cursor-pointer whitespace-nowrap">
+          <span>📌</span><span>図面本体へ送信</span>
+        </button>
+
+        <!-- クラウド同期ボタン（Cloudflare Workers + D1 + R2） -->
+        <button id="btn-cloud-sync-header" onclick="openCloudSyncModal()" class="bg-cyan-700 hover:bg-cyan-600 active:scale-95 text-white px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 shadow border border-cyan-500/60 cursor-pointer whitespace-nowrap" title="Cloudflare Workers / D1 / R2 と現場キーで同期・野帳と写真共有">
+          <span>☁️</span>
+          <span id="cloud-sync-header-label">クラウド同期</span>
+        </button>
+
+        <label class="relative overflow-hidden bg-sky-600 hover:bg-sky-500 active:scale-95 text-white px-2.5 py-1.5 rounded-lg flex items-center gap-1 shadow cursor-pointer whitespace-nowrap">
+          <span>📁 一括読込</span>
+          <input type="file" accept="image/*" multiple onchange="handleBatchImageUpload(event)" class="absolute inset-0 opacity-0 cursor-pointer" />
+        </label>
+
+        <button onclick="addPhotoItem({ sourceType: 'standalone' })" class="bg-amber-600 hover:bg-amber-500 active:scale-95 text-white px-2.5 py-1.5 rounded-lg flex items-center gap-1 shadow cursor-pointer whitespace-nowrap">
+          <span>＋</span><span>自由写真枠</span>
+        </button>
+
+        <button onclick="openDiscordModal()" class="bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white px-2.5 py-1.5 rounded-lg flex items-center gap-1 cursor-pointer whitespace-nowrap">
+          <span>🚀</span><span class="hidden md:inline">Discord</span>
+        </button>
+
+        <button onclick="openDataModal()" class="bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 px-2.5 py-1.5 rounded-lg flex items-center gap-1 cursor-pointer whitespace-nowrap">
+          <span>📦</span><span class="hidden md:inline">JSON</span>
+        </button>
+
+        <button onclick="window.print()" class="bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white px-3 py-1.5 rounded-lg flex items-center gap-1 shadow cursor-pointer whitespace-nowrap">
+          <span>🖨️</span><span id="btn-print-label">A4縦印刷 / PDF</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ==================== 2. 台帳レイアウト・用紙サイズ・構成プルダウン・電子黒板4種バー ==================== -->
+  <div class="no-print bg-slate-800 border-b border-slate-700 px-3 py-2 text-xs text-slate-200">
+    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
+      <!-- 用紙サイズプルダウン ＆ 用紙サイズ別・構成テンプレートプルダウン -->
+      <div class="flex flex-wrap items-center gap-2">
+        <div class="inline-flex items-center gap-1 bg-slate-900 p-1 rounded-lg border border-slate-700 text-[11px]" title="用紙サイズを選択すると、そのサイズ専用の写真台構成へ自動切替します">
+          <span class="font-bold text-emerald-300 pl-1 whitespace-nowrap">用紙:</span>
+          <select id="paper-format-select" onchange="setPaperFormatByKey(this.value)" class="bg-slate-950 border border-emerald-700/80 rounded-md px-2 py-1 font-extrabold text-white outline-none focus:border-emerald-400 cursor-pointer">
+            <option value="A4-portrait">📄 A4（縦） 210×297mm</option>
+            <option value="A4-landscape">📃 A4（横） 297×210mm</option>
+            <option value="A3-portrait">📰 A3（縦） 297×420mm</option>
+            <option value="A3-landscape">🗺️ A3（横） 420×297mm</option>
+            <option value="yaecho-single">📓 野帳サイズ（1頁） 91×165mm</option>
+            <option value="yaecho-spread">📖 野帳見開きサイズ 182×165mm</option>
+          </select>
+        </div>
+
+        <!-- 構成テンプレート プルダウン選択 ＋ 前後切替 -->
+        <div class="inline-flex items-center gap-1 bg-slate-900 p-1 rounded-lg border border-slate-700">
+          <span id="tpl-paper-scope-label" class="text-[11px] font-bold text-amber-300 pl-1 whitespace-nowrap">A4縦の写真台:</span>
+          <button onclick="stepTemplateType(-1)" class="px-1.5 py-0.5 bg-slate-800 hover:bg-slate-700 rounded text-[10px] font-bold text-slate-200 cursor-pointer" title="前の構成へ">◀</button>
+          <select id="tpl-select" onchange="setTemplateType(this.value)" class="bg-slate-950 border border-slate-700 rounded-md px-2 py-1 text-[11px] font-extrabold text-white outline-none focus:border-amber-400 cursor-pointer max-w-[235px] sm:max-w-none">
+            <option value="3rows">① 標準3段（写真＋黒板・メモ）</option>
+            <option value="4rows">② 標準4段（写真＋黒板・メモ）</option>
+            <option value="6grid">③ 6枚一覧（2列×3段 / A3:9枚）</option>
+            <option value="before_after">④ 是正前後比較（2段4枚 / A3:6枚）</option>
+            <option value="public_3step">⑤ 公共工事（着工前・施工中・完了）</option>
+            <option value="4grid">⑥ 【縦】写真4枚枠（タイトル付 2×2）</option>
+            <option value="4grid_h">⑦ 【横】写真4枚枠（タイトル付 2×2）</option>
+            <option value="2grid_h">⑧ 【横】写真2枚枠（メモ付 上下2段）</option>
+            <option value="photo_only_2v">⑨ 【写真のみ】上下2段（A4:2枚 / A3:4枚）</option>
+            <option value="photo_only_4">⑩ 【写真のみ】4枚枠（2列×2段）</option>
+            <option value="photo_only_8">⑪ 【写真のみ】8枚枠（A3向け 2×4 / 横4×2）</option>
+            <option value="yaecho_single_card">⑫ 【野帳1頁】写真＋野帳方眼メモ（1頁1件）</option>
+            <option value="yaecho_single_photo_only">⑬ 【野帳1頁】写真のみ大判（1頁1枚）</option>
+            <option value="yaecho_spread">⑭ 【野帳見開き】写真＋方眼メモ（1見開き）</option>
+            <option value="yaecho_spread_x2">⑮ 【野帳見開き】2枚連続（A3折畳用）</option>
+          </select>
+          <button onclick="stepTemplateType(1)" class="px-1.5 py-0.5 bg-slate-800 hover:bg-slate-700 rounded text-[10px] font-bold text-slate-200 cursor-pointer" title="次の構成へ">▶</button>
+        </div>
+
+        <!-- 綴じ穴あけ余白 ＆ 野帳トンボ -->
+        <div class="inline-flex items-center gap-1 bg-slate-900 p-1 rounded-lg border border-slate-700 text-[11px]" title="ファイル綴じ用の穴あけ余白スペースを端に確保します">
+          <span class="font-bold text-sky-300 pl-1 whitespace-nowrap">🕳️ 綴じ穴余白:</span>
+          <select id="sel-binding-margin" onchange="setBindingMargin(this.value)" class="bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 font-bold text-white outline-none cursor-pointer">
+            <option value="none">なし (0mm)</option>
+            <option value="left">左綴じ (+18mm)</option>
+            <option value="top">上綴じ (+18mm)</option>
+          </select>
+        </div>
+
+        <div id="yaecho-crop-bar" class="inline-flex items-center gap-1 bg-emerald-950/90 p-1 rounded-lg border border-emerald-700 text-[11px]" title="野帳見開き印刷時の切り取りトンボ寸法（フルサイズ / 少し縮める）">
+          <span class="font-bold text-emerald-300 pl-1 whitespace-nowrap">✂️ 野帳トンボ:</span>
+          <select id="sel-yaecho-crop" onchange="setYaechoCropMode(this.value)" class="bg-slate-950 border border-emerald-700 rounded px-1.5 py-0.5 font-bold text-amber-200 outline-none cursor-pointer">
+            <option value="full">フルサイズ (100% / 182×165mm)</option>
+            <option value="shrink">少し縮める (94% / 170×155mm)</option>
+            <option value="off">トンボなし</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- 表示オプション（電子小黒板デフォルト4種 ＆ 黒板記載設定） ＆ 種別フィルタ -->
+      <div class="flex flex-wrap items-center gap-2 text-[11px]">
+        <div class="inline-flex items-center gap-1.5 bg-slate-900 px-2 py-1 rounded-lg border border-slate-700 font-bold">
+          <label class="inline-flex items-center gap-1 cursor-pointer select-none">
+            <input id="chk-mini-chalkboard" type="checkbox" onchange="toggleMiniChalkboard(this.checked)" class="accent-emerald-500 cursor-pointer" />
+            <span>🟩 電子小黒板:</span>
+          </label>
+          <select id="sel-chalkboard-style" onchange="setChalkboardStyle(this.value)" class="bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-[10px] font-bold text-emerald-200 outline-none cursor-pointer">
+            <option value="green_classic">① 標準グリーン黒板</option>
+            <option value="dark_slate">② ダークグレー黒板</option>
+            <option value="white_board">③ ホワイトボード風</option>
+            <option value="compact_stamp">④ スリム横帯黒板</option>
+          </select>
+          <button onclick="openChalkboardEditor(null)" class="px-1.5 py-0.5 bg-emerald-800 hover:bg-emerald-700 border border-emerald-600 text-white rounded text-[10px] font-extrabold cursor-pointer" title="黒板の項目名・共通記載内容・表示項目を編集します">
+            ✏️ 黒板記載設定
+          </button>
+        </div>
+
+        <div class="inline-flex rounded-lg bg-slate-900 p-0.5 border border-slate-700 font-bold">
+          <button onclick="setSourceFilter('all')" id="flt-btn-all" class="flt-btn px-2 py-0.5 rounded bg-sky-600 text-white cursor-pointer">すべて</button>
+          <button onclick="setSourceFilter('pin')" id="flt-btn-pin" class="flt-btn px-2 py-0.5 rounded text-slate-300 cursor-pointer">📍ピン連動</button>
+          <button onclick="setSourceFilter('standalone')" id="flt-btn-standalone" class="flt-btn px-2 py-0.5 rounded text-slate-300 cursor-pointer">📷ピン外自由</button>
+        </div>
+
+        <span id="page-summary-badge" class="px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-700 font-mono font-bold text-amber-300">
+          A4縦 / 全 1 頁 / 3 枚
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 3. 中央A4/A3工事写真台帳プレビュー＆直接編集エリア ==================== -->
+  <main id="ledger-scroll-area" class="flex-1 overflow-auto p-3 sm:p-6">
+    <div id="ledger-pages-container" class="max-w-5xl mx-auto"></div>
+  </main>
+
+  <!-- ==================== モーダル0：☁️ クラウド同期設定・現場キー切替・共通写真プール ==================== -->
+  <div id="modal-cloud-sync" class="no-print hidden fixed inset-0 bg-black/80 backdrop-blur-xs z-50 items-center justify-center p-2 sm:p-4">
+    <div class="bg-slate-900 border border-cyan-700/70 text-white rounded-2xl w-full max-w-2xl max-h-[92vh] flex flex-col overflow-hidden shadow-2xl text-xs">
+      <div class="px-4 py-3 bg-cyan-950 border-b border-cyan-800 flex items-center justify-between shrink-0">
+        <h2 class="font-extrabold text-sm flex items-center gap-1.5">
+          <span>☁️</span> クラウド同期設定（ログイン不要・現場キー方式 ／ 野帳システム共通）
+        </h2>
+        <button onclick="closeModal('modal-cloud-sync')" class="text-slate-400 hover:text-white text-lg px-2 cursor-pointer">✕</button>
+      </div>
+
+      <div class="p-4 overflow-y-auto space-y-3.5 flex-1">
+        <!-- 1. 保存済み現場のワンタップ切替 -->
+        <div class="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="font-extrabold text-cyan-300">1. 端末に保存済みの現場キー切替（複数現場対応）</span>
+            <span id="cloud-conn-badge" class="px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 text-[10px] font-bold">未確認</span>
+          </div>
+          <div class="flex flex-wrap gap-1.5">
+            <select id="cloud-saved-sites-select" onchange="selectSavedCloudSite(this.value)" class="flex-1 min-w-[200px] bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-bold outline-none focus:border-cyan-400 cursor-pointer"></select>
+            <button onclick="removeCurrentSavedSite()" class="px-2.5 py-2 bg-slate-800 hover:bg-rose-900 border border-slate-700 rounded-xl text-[11px] font-bold text-slate-300 hover:text-white cursor-pointer" title="この端末のリストから削除">
+              リスト削除
+            </button>
+          </div>
+        </div>
+
+        <!-- 2. 接続URL ＆ 現場キー（合言葉）入力・新規発行 -->
+        <div class="p-3 rounded-xl bg-slate-800/80 border border-slate-700 space-y-2.5">
+          <div class="font-extrabold text-amber-300">2. 同期サーバーURL ＆ 現場キー（端末の localStorage に保存）</div>
+
+          <div>
+            <label class="block text-[10px] text-slate-400 font-bold mb-1">同期サーバーURL（Cloudflare Workers URL ※空欄時は単体ローカル動作）</label>
+            <input id="cloud-api-url-input" type="url" placeholder=""
+                   class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono outline-none focus:border-cyan-400" />
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div>
+              <label class="block text-[10px] text-slate-400 font-bold mb-1">現場キー（合言葉・ID）</label>
+              <div class="flex gap-1">
+                <input id="cloud-site-key-input" type="text" placeholder="site_demo_2026"
+                       class="flex-1 min-w-0 bg-slate-950 border border-slate-700 rounded-xl px-2.5 py-2 text-amber-200 font-mono font-bold outline-none focus:border-cyan-400" />
+                <button type="button" onclick="generateNewRandomSiteKey()" class="px-2.5 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-xl font-bold text-[10px] whitespace-nowrap cursor-pointer" title="新しい現場用のランダムキーを生成">
+                  🎲 新規生成
+                </button>
+              </div>
+            </div>
+            <div>
+              <label class="block text-[10px] text-slate-400 font-bold mb-1">現場名（サーバー登録・表示用）</label>
+              <input id="cloud-site-name-input" type="text" placeholder="○○新築工事"
+                     class="w-full bg-slate-950 border border-slate-700 rounded-xl px-2.5 py-2 text-white font-bold outline-none focus:border-cyan-400" />
+            </div>
+          </div>
+
+          <div class="flex flex-wrap items-center justify-between gap-2 pt-1">
+            <button type="button" onclick="saveAndVerifyCloudConnection()" class="flex-1 py-2.5 px-4 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl font-extrabold shadow cursor-pointer">
+              🔌 接続テスト ＆ この現場キーを端末に保存
+            </button>
+          </div>
+          <div id="cloud-status-message" class="text-[11px] text-slate-300 bg-slate-950/90 border border-slate-800 rounded-lg px-3 py-2">
+            ※URLと現場キーはブラウザの localStorage に保存されます。同じ現場キーを野帳システムに入力すると写真・豆図が共有されます。
+          </div>
+        </div>
+
+        <!-- 3. 写真台帳データのクラウド同期（Push / Pull） -->
+        <div class="p-3 rounded-xl bg-emerald-950/40 border border-emerald-700/70 space-y-2">
+          <div class="font-extrabold text-emerald-300">3. 工事写真台帳のクラウド同期（D1 データベース ＋ R2 画像ストレージ）</div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <button type="button" onclick="pushLedgerToCloud()" id="btn-cloud-push" class="py-2.5 px-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-extrabold shadow flex items-center justify-center gap-1.5 cursor-pointer">
+              <span>⬆️</span><span>現在の台帳をクラウドへ保存 (Push)</span>
+            </button>
+            <button type="button" onclick="pullLedgerFromCloud()" id="btn-cloud-pull" class="py-2.5 px-3 bg-sky-600 hover:bg-sky-500 text-white rounded-xl font-extrabold shadow flex items-center justify-center gap-1.5 cursor-pointer">
+              <span>⬇️</span><span>クラウドから台帳を読込 (Pull)</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 4. 共通写真・豆図プール（野帳システムと共有） -->
+        <div class="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="font-extrabold text-amber-300">4. 🖼️ 共通写真・豆図プール（野帳システムと共有）</span>
+            <button type="button" onclick="refreshCloudSharedMediaPool()" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-[10px] font-bold text-cyan-300 cursor-pointer">
+              🔄 一覧を更新
+            </button>
+          </div>
+          <div id="cloud-shared-media-grid" class="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-48 overflow-y-auto p-1">
+            <div class="col-span-full text-center text-slate-400 py-4">「🔄 一覧を更新」または「接続テスト」を押すと、この現場キーの共有写真・豆図が表示されます</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== モーダル1：台帳プロジェクト切替・新規作成 ==================== -->
+  <div id="modal-projects" class="no-print hidden fixed inset-0 bg-black/75 backdrop-blur-xs z-50 items-center justify-center p-3">
+    <div class="bg-slate-900 border border-slate-700 text-white rounded-2xl w-full max-w-lg max-h-[86vh] flex flex-col overflow-hidden shadow-2xl">
+      <div class="px-4 py-3 bg-slate-800 border-b border-slate-700 flex items-center justify-between">
+        <h2 class="font-bold text-sm flex items-center gap-1.5"><span>📁</span> 工事写真台帳プロジェクト切替</h2>
+        <button onclick="closeModal('modal-projects')" class="text-slate-400 hover:text-white text-lg px-2 cursor-pointer">✕</button>
+      </div>
+      <div class="p-3 bg-slate-950 border-b border-slate-800 flex gap-2 text-xs">
+        <input id="new-project-name-input" type="text" placeholder="新規工事名（例：第2工区 基礎配筋写真帳）"
+               class="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white outline-none focus:border-amber-400" />
+        <button onclick="createNewProjectFromModal()" class="bg-amber-600 hover:bg-amber-500 text-white font-extrabold px-4 py-2 rounded-xl cursor-pointer whitespace-nowrap">
+          ＋ 新規作成
+        </button>
+      </div>
+      <div id="project-list-body" class="p-3 overflow-y-auto space-y-2 flex-1 text-xs"></div>
+    </div>
+  </div>
+
+  <!-- ==================== モーダル2：共有JSON保存・読込・サンプルピン取込 ==================== -->
+  <div id="modal-data" class="no-print hidden fixed inset-0 bg-black/75 backdrop-blur-xs z-50 items-center justify-center p-3">
+    <div class="bg-slate-900 border border-slate-700 text-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl text-xs">
+      <div class="px-4 py-3 bg-slate-800 border-b border-slate-700 flex items-center justify-between">
+        <h2 class="font-bold text-sm">💾 台帳データの共有保存・読込・連携</h2>
+        <button onclick="closeModal('modal-data')" class="text-slate-400 hover:text-white text-lg px-2 cursor-pointer">✕</button>
+      </div>
+      <div class="p-4 space-y-2.5">
+        <button onclick="exportLedgerJson()" class="w-full py-2.5 px-3 bg-sky-600 hover:bg-sky-500 text-white rounded-xl font-bold flex items-center justify-between cursor-pointer">
+          <span>📦 台帳プロジェクトをJSON保存（他端末へ引継）</span>
+          <span>↓</span>
+        </button>
+        <label class="w-full py-2.5 px-3 bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white rounded-xl font-bold flex items-center justify-between cursor-pointer">
+          <span>📂 JSONファイルから台帳を読み込む</span>
+          <span>↑</span>
+          <input type="file" accept=".json,application/json" onchange="importLedgerJson(event)" class="hidden" />
+        </label>
+        <div class="pt-2 border-t border-slate-800 space-y-1.5">
+          <div class="text-[11px] text-slate-400 font-bold">図面メモ本体との連携テスト・サンプル</div>
+          <button onclick="importSampleBlueprintPins(); closeModal('modal-data');" class="w-full py-2 px-3 bg-indigo-900/80 hover:bg-indigo-800 border border-indigo-600 text-indigo-100 rounded-xl font-bold text-left cursor-pointer">
+            📍 図面メモの管理ピン一覧を台帳へ取り込む（デモ）
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== モーダル3：Discord Webhook送信 ==================== -->
+  <div id="modal-discord" class="no-print hidden fixed inset-0 bg-black/75 backdrop-blur-xs z-50 items-center justify-center p-3">
+    <div class="bg-slate-900 border border-slate-700 text-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl text-xs">
+      <div class="px-4 py-3 bg-indigo-950 border-b border-indigo-800 flex items-center justify-between">
+        <h2 class="font-bold text-sm">🚀 Discord 工事写真台帳サマリー＆JSON送信</h2>
+        <button onclick="closeModal('modal-discord')" class="text-slate-400 hover:text-white text-lg px-2 cursor-pointer">✕</button>
+      </div>
+      <div class="p-4 space-y-3">
+        <div>
+          <label class="block font-bold text-indigo-300 mb-1">Discord Webhook URL（端末内のみ保存）</label>
+          <input id="ledger-webhook-input" type="url" placeholder="https://discord.com/api/webhooks/..."
+                 class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white outline-none focus:border-indigo-400" />
+        </div>
+        <div>
+          <label class="block font-bold text-slate-300 mb-1">送信コメント</label>
+          <input id="ledger-discord-msg" type="text" value="本日の工事写真台帳データを共有します。"
+                 class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white outline-none focus:border-indigo-400" />
+        </div>
+        <div class="text-[10px] text-slate-400">
+          ※現在の台帳一覧テキスト（工種・場所・コメント一覧）と再編集用JSONファイルを送信します。未設定時は何もせずローカル保存のみ行います。
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <button onclick="saveWebhookOnly()" class="py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-xl font-bold cursor-pointer">URL保存のみ</button>
+          <button onclick="sendLedgerToDiscord()" class="py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold rounded-xl cursor-pointer">📤 今すぐ送信</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== モーダル4：豆図 ＆ 写真直接ベクター編集・SVG/PNG/野帳JSON出力モーダル ==================== -->
+  <div id="modal-mamezu" class="no-print hidden fixed inset-0 bg-black/80 backdrop-blur-xs z-50 items-center justify-center p-2 sm:p-4">
+    <div class="bg-slate-900 border border-slate-700 text-white rounded-2xl w-full max-w-3xl max-h-[95vh] flex flex-col overflow-hidden shadow-2xl text-xs">
+      <div id="mz-modal-header" class="px-4 py-2.5 bg-emerald-950 border-b border-emerald-800 flex items-center justify-between shrink-0">
+        <h2 id="mz-modal-title" class="font-extrabold text-sm flex items-center gap-1.5"><span>📐</span> 豆図（施工位置・断面・略図）作成・編集</h2>
+        <button onclick="closeModal('modal-mamezu')" class="text-slate-400 hover:text-white text-lg px-2 cursor-pointer">✕</button>
+      </div>
+
+      <!-- 略図ひな型プルダウン（11種） ＆ 画像/SVG読込・単独出力バー -->
+      <div class="px-3 py-2 bg-slate-950 border-b border-slate-800 flex flex-wrap items-center justify-between gap-1.5 shrink-0 text-[11px]">
+        <div id="mz-preset-bar" class="flex flex-wrap items-center gap-1.5">
+          <span class="text-slate-400 font-bold">略図雛形:</span>
+          <select id="mz-preset-select" onchange="if(this.value){ applyMamezuPreset(this.value); this.value=''; }" class="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 font-bold text-amber-200 outline-none cursor-pointer">
+            <option value="">-- 略図雛形を選択 (11種) --</option>
+            <option value="blank">⬜ 白紙クリア</option>
+            <option value="plan">➕ 通り芯平面図</option>
+            <option value="section">🏗️ 基礎・梁断面図</option>
+            <option value="opening">🚧 開口部・手すり養生</option>
+            <option value="sleeve">⭕ 貫通スリーブ納まり</option>
+            <option value="rebar">🔩 【追加①】鉄筋配筋断面（かぶり厚）</option>
+            <option value="stair">🪜 【追加②】階段・段差・スロープ断面</option>
+            <option value="waterproof">💧 【追加③】屋上・バルコニー防水立上り</option>
+            <option value="piping">🔧 【追加④】配管・ダクト系統ルート</option>
+            <option value="scaffold">🦺 【追加⑤】外部足場・親綱・安全通路</option>
+            <option value="earthwork">⛰️ 【追加⑥】掘削・根切り・埋戻し断面</option>
+          </select>
+          <button type="button" onclick="toggleMamezuCloudPicker()" class="px-2.5 py-1 bg-cyan-700 hover:bg-cyan-600 text-white rounded-lg font-extrabold cursor-pointer shadow-xs" title="野帳システムからクラウドへ共有した豆図・画像を読み込みます">
+            ☁️ 野帳の豆図を取込
+          </button>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-1">
+          <label class="relative overflow-hidden px-2 py-1 bg-sky-700 hover:bg-sky-600 text-white rounded font-bold cursor-pointer" title="図面や画像を挿入">
+            <span>🖼️ 画像挿入</span>
+            <input type="file" accept="image/*" onchange="loadMamezuBackgroundImage(event)" class="absolute inset-0 opacity-0 cursor-pointer" />
+          </label>
+          <label class="relative overflow-hidden px-2 py-1 bg-teal-700 hover:bg-teal-600 text-white rounded font-bold cursor-pointer" title="SVGファイルをベクター図として挿入">
+            <span>📐 SVG挿入</span>
+            <input type="file" accept=".svg,image/svg+xml" onchange="importSvgIntoMamezu(event)" class="absolute inset-0 opacity-0 cursor-pointer" />
+          </label>
+          <button onclick="downloadMamezuPng()" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-600 text-sky-200 rounded font-bold cursor-pointer" title="現在の図をPNG画像として保存">
+            PNG出力
+          </button>
+          <button onclick="downloadMamezuSvg()" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-600 text-emerald-200 rounded font-bold cursor-pointer" title="現在の図をSVGベクターファイルとして出力">
+            SVG出力
+          </button>
+          <label class="relative overflow-hidden px-2 py-1 bg-indigo-700 hover:bg-indigo-600 text-white rounded font-bold cursor-pointer" title="野帳システムのJSONファイルを選択し、現在の図(SVG)を挿入してJSON出力します">
+            <span>📓 野帳JSONへ挿入出力</span>
+            <input type="file" accept=".json,application/json" onchange="exportMamezuIntoFieldnoteJson(event)" class="absolute inset-0 opacity-0 cursor-pointer" />
+          </label>
+        </div>
+      </div>
+
+      <!-- Back（背景） -->
+      <div id="mz-bg-bar" class="px-3 py-1.5 bg-slate-900 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2 shrink-0 text-[11px]">
+        <div class="flex flex-wrap items-center gap-1">
+          <span class="text-amber-300 font-extrabold">Back:</span>
+          <button onclick="setMamezuBgType('white')" id="mz-bg-white" class="mz-bg-btn px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-bold cursor-pointer">⬜ 白紙</button>
+          <button onclick="setMamezuBgType('dots')" id="mz-bg-dots" class="mz-bg-btn px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-bold cursor-pointer">⠿ ドット</button>
+          <button onclick="setMamezuBgType('grid')" id="mz-bg-grid" class="mz-bg-btn px-2 py-0.5 rounded bg-emerald-600 text-white font-bold cursor-pointer">⊞ 方眼</button>
+          <button onclick="setMamezuBgType('tint')" id="mz-bg-tint" class="mz-bg-btn px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-bold cursor-pointer">🎨 薄い色</button>
+        </div>
+
+        <div id="mz-bg-tint-controls" class="flex flex-wrap items-center gap-1.5">
+          <button onclick="setMamezuBgTintColor('#fef9c3')" class="w-4 h-4 rounded-full bg-yellow-100 border border-slate-400 cursor-pointer" title="薄黄"></button>
+          <button onclick="setMamezuBgTintColor('#e0f2fe')" class="w-4 h-4 rounded-full bg-sky-100 border border-slate-400 cursor-pointer" title="薄青"></button>
+          <button onclick="setMamezuBgTintColor('#dcfce7')" class="w-4 h-4 rounded-full bg-emerald-100 border border-slate-400 cursor-pointer" title="薄緑"></button>
+          <button onclick="setMamezuBgTintColor('#fee2e2')" class="w-4 h-4 rounded-full bg-rose-100 border border-slate-400 cursor-pointer" title="薄赤"></button>
+          <input id="mz-bg-color-picker" type="color" value="#fef9c3" oninput="setMamezuBgTintColor(this.value)" class="w-5 h-5 bg-transparent border-0 cursor-pointer" title="背景カラー" />
+          <span class="text-[10px] text-slate-400">透明度:</span>
+          <input id="mz-bg-alpha-slider" type="range" min="0" max="100" value="35" oninput="setMamezuBgAlpha(this.value)" class="w-16 accent-amber-400 cursor-pointer" />
+          <span id="mz-bg-alpha-label" class="font-mono text-[10px] text-amber-200 w-8">35%</span>
+        </div>
+      </div>
+
+      <!-- 野帳共有プールからの豆図ワンクリック読込ドロワー -->
+      <div id="mz-cloud-picker-bar" class="hidden px-3 py-2 bg-cyan-950/90 border-b border-cyan-700 space-y-1.5 shrink-0">
+        <div class="flex items-center justify-between text-[11px]">
+          <span class="font-extrabold text-cyan-200">☁️ 野帳システム等から共有された豆図・画像（クリックでこの写真枠に挿入）</span>
+          <button type="button" onclick="document.getElementById('mz-cloud-picker-bar').classList.add('hidden')" class="text-slate-300 hover:text-white px-1.5 cursor-pointer">✕ 閉じる</button>
+        </div>
+        <div id="mz-cloud-picker-grid" class="grid grid-cols-4 sm:grid-cols-6 gap-2 max-h-28 overflow-y-auto"></div>
+      </div>
+
+      <!-- 作図・選択ツールバー -->
+      <div class="px-3 py-2 bg-slate-800 border-b border-slate-700 flex flex-wrap items-center justify-between gap-1.5 shrink-0 text-[11px]">
+        <div class="flex flex-wrap items-center gap-1">
+          <button onclick="setMamezuTool('select')" id="mz-tool-select" class="mz-tool-btn px-2 py-1 rounded bg-slate-700 text-slate-200 font-bold cursor-pointer">👆 選択/移動</button>
+          <button onclick="setMamezuTool('leader')" id="mz-tool-leader" class="mz-tool-btn px-2 py-1 rounded bg-slate-700 text-slate-200 font-bold cursor-pointer">🏷️ 引き出し線</button>
+          <button onclick="setMamezuTool('pen')" id="mz-tool-pen" class="mz-tool-btn px-2 py-1 rounded bg-emerald-600 text-white font-bold cursor-pointer">✏️ ペン</button>
+          <button onclick="setMamezuTool('line')" id="mz-tool-line" class="mz-tool-btn px-2 py-1 rounded bg-slate-700 text-slate-200 font-bold cursor-pointer">📏 直線</button>
+          <button onclick="setMamezuTool('arrow')" id="mz-tool-arrow" class="mz-tool-btn px-2 py-1 rounded bg-slate-700 text-slate-200 font-bold cursor-pointer">➡️ 矢印</button>
+          <button onclick="setMamezuTool('rect')" id="mz-tool-rect" class="mz-tool-btn px-2 py-1 rounded bg-slate-700 text-slate-200 font-bold cursor-pointer">⬜ 四角</button>
+          <button onclick="setMamezuTool('circle')" id="mz-tool-circle" class="mz-tool-btn px-2 py-1 rounded bg-slate-700 text-slate-200 font-bold cursor-pointer">⭕ 丸</button>
+          <button onclick="setMamezuTool('cloud')" id="mz-tool-cloud" class="mz-tool-btn px-2 py-1 rounded bg-slate-700 text-slate-200 font-bold cursor-pointer">☁️ 雲マーク</button>
+          <button onclick="setMamezuTool('hatch')" id="mz-tool-hatch" class="mz-tool-btn px-2 py-1 rounded bg-slate-700 text-slate-200 font-bold cursor-pointer">▨ ハッチ</button>
+          <button onclick="setMamezuTool('text')" id="mz-tool-text" class="mz-tool-btn px-2 py-1 rounded bg-slate-700 text-slate-200 font-bold cursor-pointer">T 文字</button>
+        </div>
+
+        <div class="flex items-center gap-1.5">
+          <button onclick="setMamezuColor('#0f172a')" class="w-5 h-5 rounded-full bg-slate-900 border-2 border-white cursor-pointer" title="黒"></button>
+          <button onclick="setMamezuColor('#dc2626')" class="w-5 h-5 rounded-full bg-red-600 border-2 border-white cursor-pointer" title="赤"></button>
+          <button onclick="setMamezuColor('#2563eb')" class="w-5 h-5 rounded-full bg-blue-600 border-2 border-white cursor-pointer" title="青"></button>
+          <button onclick="setMamezuColor('#059669')" class="w-5 h-5 rounded-full bg-emerald-600 border-2 border-white cursor-pointer" title="緑"></button>
+          <input id="mz-stroke-color-picker" type="color" value="#dc2626" oninput="setMamezuColor(this.value)" class="w-5 h-5 bg-transparent border-0 cursor-pointer" title="フルカラー" />
+          <button onclick="undoMamezuCanvas()" class="px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded font-bold cursor-pointer">↩️ 戻す</button>
+          <button onclick="deleteSelectedMamezuObject()" id="mz-btn-del-sel" class="hidden px-2 py-1 bg-amber-700 hover:bg-amber-600 rounded font-bold cursor-pointer">🗑️ 選択削除</button>
+          <button onclick="clearMamezuCanvas()" class="px-2 py-1 bg-rose-900 hover:bg-rose-800 rounded font-bold cursor-pointer">全消</button>
+        </div>
+      </div>
+
+      <!-- 線種(4種)・矢印始点/終点(各7種)・ハッチング(4種)・引き出し線/文字入力詳細バー -->
+      <div class="px-3 py-1.5 bg-slate-900 border-b border-slate-800 flex flex-wrap items-center gap-2 text-[11px] shrink-0">
+        <div class="inline-flex items-center gap-1">
+          <span class="text-slate-400 font-bold">線種(4種):</span>
+          <select id="mz-line-style-select" onchange="setMamezuLineStyle(this.value)" class="bg-slate-950 border border-slate-700 rounded px-2 py-0.5 font-bold text-sky-200 outline-none cursor-pointer">
+            <option value="solid">━━ 実線</option>
+            <option value="dashed">╌╌ 破線</option>
+            <option value="dotted">┈┈ 点線</option>
+            <option value="dashdot">╍╍ 一点鎖線</option>
+          </select>
+        </div>
+
+        <div class="inline-flex items-center gap-1">
+          <span class="text-blue-300 font-bold">始点:</span>
+          <select id="mz-arrow-start-select" onchange="setMamezuArrowStart(this.value)" class="bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 font-bold text-blue-200 outline-none cursor-pointer">
+            <option value="none">なし</option>
+            <option value="dot">● 丸点</option>
+            <option value="filled">▶ 黒矢印</option>
+            <option value="open">▷ 白矢印</option>
+            <option value="sharp">＞ 鋭角矢印</option>
+            <option value="arch_tick">／ 建築斜線</option>
+            <option value="bar">｜ 縦止線</option>
+          </select>
+
+          <span class="text-rose-300 font-bold">終点:</span>
+          <select id="mz-arrow-end-select" onchange="setMamezuArrowEnd(this.value)" class="bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 font-bold text-rose-200 outline-none cursor-pointer">
+            <option value="filled">▶ 黒矢印</option>
+            <option value="none">なし</option>
+            <option value="open">▷ 白矢印</option>
+            <option value="sharp">＞ 鋭角矢印</option>
+            <option value="dot">● 丸点</option>
+            <option value="arch_tick">／ 建築斜線</option>
+            <option value="bar">｜ 縦止線</option>
+          </select>
+
+          <button onclick="swapSelectedArrowEndpoints()" class="px-1.5 py-0.5 bg-indigo-800 hover:bg-indigo-700 border border-indigo-600 rounded font-bold text-white cursor-pointer" title="矢印の始点と終点を入れ替え">⇄</button>
+        </div>
+
+        <div class="inline-flex items-center gap-1">
+          <span class="text-slate-400 font-bold">ハッチ:</span>
+          <select id="mz-hatch-style-select" onchange="setMamezuHatchPattern(this.value)" class="bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 font-bold text-emerald-200 outline-none cursor-pointer">
+            <option value="diag45">① ╱ 45°斜線</option>
+            <option value="cross">② ╳ クロス網目</option>
+            <option value="grid">③ ┼ 格子メッシュ</option>
+            <option value="dots">④ ⠿ ドット点描</option>
+          </select>
+        </div>
+
+        <div class="flex items-center gap-1 flex-1 min-w-[170px]">
+          <span class="text-slate-400 font-bold whitespace-nowrap">引出/文字:</span>
+          <input id="mamezu-text-stamp-input" type="text" value="確認箇所" placeholder="引き出し線・文字の内容"
+                 oninput="updateSelectedMamezuText(this.value)"
+                 class="flex-1 min-w-0 bg-slate-950 border border-slate-700 rounded px-2 py-0.5 text-white font-bold outline-none focus:border-emerald-400" />
+        </div>
+      </div>
+
+      <!-- 豆図・写真描画キャンバス -->
+      <div class="flex-1 overflow-auto bg-slate-700 p-3 flex items-center justify-center">
+        <canvas id="mamezu-canvas" width="480" height="280"
+                class="bg-white rounded shadow-xl border-2 border-slate-400 touch-none cursor-crosshair max-w-full h-auto"></canvas>
+      </div>
+
+      <!-- フッター決定ボタン -->
+      <div class="px-4 py-2.5 bg-slate-950 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2 shrink-0">
+        <button id="mz-btn-remove" onclick="removeMamezuFromPhoto()" class="px-3 py-1.5 bg-rose-950 hover:bg-rose-900 border border-rose-800 text-rose-200 rounded-xl font-bold cursor-pointer">
+          豆図を解除（なしにする）
+        </button>
+        <div class="flex items-center gap-2">
+          <button onclick="closeModal('modal-mamezu')" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-xl font-bold cursor-pointer">キャンセル</button>
+          <button id="mz-btn-save-apply" onclick="saveMamezuToPhoto()" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-extrabold shadow cursor-pointer">
+            ✅ この豆図を台帳へ挿入
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== モーダル5：電子小黒板 記載内容・項目カスタマイズモーダル ==================== -->
+  <div id="modal-chalkboard" class="no-print hidden fixed inset-0 bg-black/80 backdrop-blur-xs z-50 items-center justify-center p-2 sm:p-4">
+    <div class="bg-slate-900 border border-slate-700 text-white rounded-2xl w-full max-w-2xl max-h-[92vh] flex flex-col overflow-hidden shadow-2xl text-xs">
+      <div class="px-4 py-2.5 bg-emerald-950 border-b border-emerald-800 flex items-center justify-between shrink-0">
+        <h2 id="cb-modal-title" class="font-extrabold text-sm flex items-center gap-1.5"><span>🟩</span> 電子小黒板 記載内容・項目編集</h2>
+        <button onclick="closeModal('modal-chalkboard')" class="text-slate-400 hover:text-white text-lg px-2 cursor-pointer">✕</button>
+      </div>
+
+      <div class="p-3 sm:p-4 overflow-y-auto space-y-3 flex-1">
+        <!-- リアルタイムプレビュー -->
+        <div class="bg-slate-950 border border-slate-800 rounded-xl p-3 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div class="space-y-1 text-[11px] text-slate-300">
+            <div class="font-extrabold text-emerald-300">プレビュー（写真左下に表示される黒板）</div>
+            <div>※写真上の黒板を直接クリックしてもいつでもこの画面を開けます。</div>
+          </div>
+          <div id="cb-live-preview-box" class="shrink-0"></div>
+        </div>
+
+        <!-- セクションA：選択中の写真1枚ごとの黒板記載内容 -->
+        <div id="cb-single-photo-section" class="p-3 rounded-xl bg-slate-800/90 border border-emerald-700/70 space-y-2">
+          <div class="flex items-center justify-between">
+            <span id="cb-target-photo-label" class="font-extrabold text-emerald-300">📷 この写真の黒板記載内容</span>
+            <label class="inline-flex items-center gap-1 text-[11px] font-bold text-amber-200 cursor-pointer">
+              <input id="cb-single-hide" type="checkbox" oninput="updateChalkboardPreviewFromModal()" class="accent-amber-500" />
+              <span>この写真だけ黒板を隠す</span>
+            </label>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div>
+              <label class="block text-[10px] text-slate-400 font-bold mb-0.5">黒板タイトル（工事名・件名 ※空欄時は共通名）</label>
+              <input id="cb-single-title" type="text" oninput="updateChalkboardPreviewFromModal()" placeholder="例：○○新築工事 1F躯体"
+                     class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white font-bold outline-none focus:border-emerald-400" />
+            </div>
+            <div>
+              <label class="block text-[10px] text-slate-400 font-bold mb-0.5">この写真の黒板デザイン</label>
+              <select id="cb-single-style" onchange="updateChalkboardPreviewFromModal()" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-emerald-200 font-bold outline-none">
+                <option value="">共通設定に従う</option>
+                <option value="green_classic">① 標準グリーン黒板</option>
+                <option value="dark_slate">② ダークグレー黒板</option>
+                <option value="white_board">③ ホワイトボード風</option>
+                <option value="compact_stamp">④ スリム横帯黒板</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <div>
+              <label id="cb-single-lbl-work" class="block text-[10px] text-slate-400 font-bold mb-0.5">工種</label>
+              <input id="cb-single-work" type="text" oninput="updateChalkboardPreviewFromModal()"
+                     class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white font-bold outline-none focus:border-emerald-400" />
+            </div>
+            <div>
+              <label id="cb-single-lbl-loc" class="block text-[10px] text-slate-400 font-bold mb-0.5">測点・箇所</label>
+              <input id="cb-single-loc" type="text" oninput="updateChalkboardPreviewFromModal()"
+                     class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white font-bold outline-none focus:border-emerald-400" />
+            </div>
+            <div>
+              <label class="block text-[10px] text-slate-400 font-bold mb-0.5">撮影日時</label>
+              <input id="cb-single-date" type="text" oninput="updateChalkboardPreviewFromModal()"
+                     class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white font-mono outline-none focus:border-emerald-400" />
+            </div>
+          </div>
+
+          <div>
+            <div class="flex items-center justify-between mb-0.5">
+              <label class="text-[10px] text-slate-400 font-bold">黒板内の自由記載欄（設計値・実測値・施工状況など複数行可）</label>
+              <button type="button" onclick="copyCommentToChalkboardBody()" class="text-[10px] text-sky-300 hover:underline font-bold cursor-pointer">
+                📋 メモ欄の内容をコピー
+              </button>
+            </div>
+            <textarea id="cb-single-body" rows="2" oninput="updateChalkboardPreviewFromModal()" placeholder="例：設計 H=1,100 / 実測 H=1,105&#10;立会者：○○建設"
+                      class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white leading-snug outline-none focus:border-emerald-400 resize-none"></textarea>
+          </div>
+        </div>
+
+        <!-- セクションB：全写真共通の黒板項目ラベル・デフォルト文・表示ON/OFF設定 -->
+        <div class="p-3 rounded-xl bg-slate-800/70 border border-slate-700 space-y-2">
+          <div class="font-extrabold text-amber-300">⚙️ 全写真共通の黒板テンプレート・項目名設定</div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div>
+              <label class="block text-[10px] text-slate-400 font-bold mb-0.5">共通黒板タイトル（空欄時は工事名を使用）</label>
+              <input id="cb-cfg-title" type="text" oninput="updateChalkboardPreviewFromModal()" placeholder="（自動：プロジェクト工事名）"
+                     class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1 text-white outline-none focus:border-amber-400" />
+            </div>
+            <div>
+              <label class="block text-[10px] text-slate-400 font-bold mb-0.5">共通施工者・会社名（空欄時は施工者名を使用）</label>
+              <input id="cb-cfg-contractor" type="text" oninput="updateChalkboardPreviewFromModal()" placeholder="（自動：台帳の施工者名）"
+                     class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1 text-white outline-none focus:border-amber-400" />
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-[10px] text-slate-400 font-bold mb-0.5">1行目の項目名ラベル（初期：工種）</label>
+              <input id="cb-cfg-lbl-work" type="text" value="工種" oninput="updateChalkboardPreviewFromModal()"
+                     class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-white font-bold outline-none focus:border-amber-400" />
+            </div>
+            <div>
+              <label class="block text-[10px] text-slate-400 font-bold mb-0.5">2行目の項目名ラベル（初期：測点）</label>
+              <input id="cb-cfg-lbl-loc" type="text" value="測点" oninput="updateChalkboardPreviewFromModal()"
+                     class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-white font-bold outline-none focus:border-amber-400" />
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-[10px] text-slate-400 font-bold mb-0.5">全写真共通の黒板定型文（個別欄が空欄の写真に自動表示）</label>
+            <textarea id="cb-cfg-default-body" rows="2" oninput="updateChalkboardPreviewFromModal()" placeholder="例：安全管理・自主検査記録"
+                      class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1 text-white leading-snug outline-none focus:border-amber-400 resize-none"></textarea>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-3 pt-1 text-[11px] font-bold text-slate-200">
+            <label class="inline-flex items-center gap-1 cursor-pointer">
+              <input id="cb-cfg-show-title" type="checkbox" checked onchange="updateChalkboardPreviewFromModal()" class="accent-emerald-500" />
+              <span>工事名</span>
+            </label>
+            <label class="inline-flex items-center gap-1 cursor-pointer">
+              <input id="cb-cfg-show-work" type="checkbox" checked onchange="updateChalkboardPreviewFromModal()" class="accent-emerald-500" />
+              <span>工種行</span>
+            </label>
+            <label class="inline-flex items-center gap-1 cursor-pointer">
+              <input id="cb-cfg-show-loc" type="checkbox" checked onchange="updateChalkboardPreviewFromModal()" class="accent-emerald-500" />
+              <span>測点行</span>
+            </label>
+            <label class="inline-flex items-center gap-1 cursor-pointer">
+              <input id="cb-cfg-show-body" type="checkbox" checked onchange="updateChalkboardPreviewFromModal()" class="accent-emerald-500" />
+              <span>自由記載行</span>
+            </label>
+            <label class="inline-flex items-center gap-1 cursor-pointer">
+              <input id="cb-cfg-show-contractor" type="checkbox" onchange="updateChalkboardPreviewFromModal()" class="accent-emerald-500" />
+              <span>施工者名</span>
+            </label>
+            <label class="inline-flex items-center gap-1 cursor-pointer">
+              <input id="cb-cfg-show-date" type="checkbox" checked onchange="updateChalkboardPreviewFromModal()" class="accent-emerald-500" />
+              <span>撮影日時</span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="px-4 py-2.5 bg-slate-950 border-t border-slate-800 flex items-center justify-end gap-2 shrink-0">
+        <button onclick="closeModal('modal-chalkboard')" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-xl font-bold cursor-pointer">キャンセル</button>
+        <button onclick="saveChalkboardModalSettings()" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-extrabold shadow cursor-pointer">
+          ✅ 黒板の記載内容を反映する
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- トースト通知 -->
+  <div id="toast" class="no-print hidden fixed bottom-5 left-1/2 -translate-x-1/2 bg-slate-900/95 border border-emerald-500/70 text-white text-xs font-bold px-4 py-2 rounded-full shadow-2xl z-50 whitespace-nowrap"></div>
+
+  <script>
+    const STORAGE_KEY_LEDGER = 'genba_construction_ledger_v1';
+    const STORAGE_KEY_CLOUD_SYNC = 'genba_cloud_sync_config_v1';
+    const DEFAULT_WORKER_URL = 'https://genba-sync.thanksadd.workers.dev';
+    const DEFAULT_DEMO_SITE_KEY = 'site_demo_2026';
+
+    // ==================== クラウド同期設定（Webhook方式・localStorage保存） ====================
+    let cloudSyncConfig = {
+      activeUrl: DEFAULT_WORKER_URL,
+      activeSiteKey: DEFAULT_DEMO_SITE_KEY,
+      connected: false,
+      savedSites: [
+        {
+          siteKey: DEFAULT_DEMO_SITE_KEY,
+          siteName: '○○新築工事（テスト現場）',
+          contractor: '施工管理担当',
+          url: DEFAULT_WORKER_URL
+        }
+      ]
+    };
+
+    function loadCloudSyncConfig() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY_CLOUD_SYNC);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed === 'object') {
+            cloudSyncConfig = Object.assign(cloudSyncConfig, parsed);
+            if (!Array.isArray(cloudSyncConfig.savedSites) || cloudSyncConfig.savedSites.length === 0) {
+              cloudSyncConfig.savedSites = [{
+                siteKey: cloudSyncConfig.activeSiteKey || DEFAULT_DEMO_SITE_KEY,
+                siteName: '○○新築工事（テスト現場）',
+                contractor: '施工管理担当',
+                url: cloudSyncConfig.activeUrl || DEFAULT_WORKER_URL
+              }];
+            }
+          }
+        }
+      } catch (_) {}
+      updateCloudHeaderBadge();
+    }
+
+    function saveCloudSyncConfig() {
+      try {
+        localStorage.setItem(STORAGE_KEY_CLOUD_SYNC, JSON.stringify(cloudSyncConfig));
+      } catch (_) {}
+      updateCloudHeaderBadge();
+    }
+
+    function updateCloudHeaderBadge() {
+      const btn = document.getElementById('btn-cloud-sync-header');
+      const lbl = document.getElementById('cloud-sync-header-label');
+      if (!btn || !lbl) return;
+
+      const activeSite = cloudSyncConfig.savedSites.find(s => s.siteKey === cloudSyncConfig.activeSiteKey);
+      if (cloudSyncConfig.activeUrl && cloudSyncConfig.activeSiteKey) {
+        lbl.textContent = cloudSyncConfig.connected
+          ? `🟢 ${activeSite?.siteName || cloudSyncConfig.activeSiteKey}`
+          : `☁️ ${cloudSyncConfig.activeSiteKey}`;
+        btn.classList.toggle('bg-emerald-700', cloudSyncConfig.connected);
+        btn.classList.toggle('border-emerald-400', cloudSyncConfig.connected);
+        btn.classList.toggle('bg-cyan-700', !cloudSyncConfig.connected);
+      } else {
+        lbl.textContent = '☁️ クラウド未接続';
+        btn.classList.remove('bg-emerald-700', 'border-emerald-400');
+        btn.classList.add('bg-cyan-700');
+      }
+    }
+
+    function renderSavedSitesDropdown() {
+      const sel = document.getElementById('cloud-saved-sites-select');
+      if (!sel) return;
+      sel.innerHTML = cloudSyncConfig.savedSites.map(s => `
+        <option value="${escapeHtml(s.siteKey)}" ${s.siteKey === cloudSyncConfig.activeSiteKey ? 'selected' : ''}>
+          ${escapeHtml(s.siteName || s.siteKey)}（キー: ${escapeHtml(s.siteKey)}）
+        </option>
+      `).join('');
+    }
+
+    function openCloudSyncModal() {
+      renderSavedSitesDropdown();
+      const urlInp = document.getElementById('cloud-api-url-input');
+      const keyInp = document.getElementById('cloud-site-key-input');
+      const nameInp = document.getElementById('cloud-site-name-input');
+      const activeSite = cloudSyncConfig.savedSites.find(s => s.siteKey === cloudSyncConfig.activeSiteKey);
+
+      if (urlInp) urlInp.value = cloudSyncConfig.activeUrl || DEFAULT_WORKER_URL;
+      if (keyInp) keyInp.value = cloudSyncConfig.activeSiteKey || '';
+      if (nameInp) nameInp.value = activeSite?.siteName || getCurrentProject().projectName || '';
+
+      openModal('modal-cloud-sync');
+    }
+
+    function selectSavedCloudSite(siteKey) {
+      const found = cloudSyncConfig.savedSites.find(s => s.siteKey === siteKey);
+      if (!found) return;
+      cloudSyncConfig.activeSiteKey = found.siteKey;
+      cloudSyncConfig.activeUrl = found.url || cloudSyncConfig.activeUrl || DEFAULT_WORKER_URL;
+      const urlInp = document.getElementById('cloud-api-url-input');
+      const keyInp = document.getElementById('cloud-site-key-input');
+      const nameInp = document.getElementById('cloud-site-name-input');
+      if (urlInp) urlInp.value = cloudSyncConfig.activeUrl;
+      if (keyInp) keyInp.value = found.siteKey;
+      if (nameInp) nameInp.value = found.siteName || '';
+      saveCloudSyncConfig();
+      showToast(`現場キー「${found.siteName || found.siteKey}」を選択しました`);
+    }
+
+    function removeCurrentSavedSite() {
+      if (cloudSyncConfig.savedSites.length <= 1) {
+        showToast('最後の1件は削除できません');
+        return;
+      }
+      cloudSyncConfig.savedSites = cloudSyncConfig.savedSites.filter(s => s.siteKey !== cloudSyncConfig.activeSiteKey);
+      const next = cloudSyncConfig.savedSites[0];
+      cloudSyncConfig.activeSiteKey = next.siteKey;
+      cloudSyncConfig.activeUrl = next.url || DEFAULT_WORKER_URL;
+      saveCloudSyncConfig();
+      openCloudSyncModal();
+      showToast('端末の保存リストから削除しました');
+    }
+
+    function generateNewRandomSiteKey() {
+      const d = new Date();
+      const ymd = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+      const rand = Math.random().toString(36).slice(2, 7);
+      const keyInp = document.getElementById('cloud-site-key-input');
+      if (keyInp) keyInp.value = `site_${ymd}_${rand}`;
+      showToast('新しい現場キーを発行しました。「接続テスト ＆ 保存」で登録してください');
+    }
+
+    async function saveAndVerifyCloudConnection() {
+      const rawUrl = (document.getElementById('cloud-api-url-input')?.value || '').trim().replace(/\/+$/, '');
+      const siteKey = (document.getElementById('cloud-site-key-input')?.value || '').trim();
+      const siteName = (document.getElementById('cloud-site-name-input')?.value || '').trim() || '新規現場プロジェクト';
+      const statusMsg = document.getElementById('cloud-status-message');
+      const connBadge = document.getElementById('cloud-conn-badge');
+
+      cloudSyncConfig.activeUrl = rawUrl;
+      cloudSyncConfig.activeSiteKey = siteKey;
+
+      if (!rawUrl || !siteKey) {
+        cloudSyncConfig.connected = false;
+        saveCloudSyncConfig();
+        if (connBadge) {
+          connBadge.textContent = 'ローカル単体モード';
+          connBadge.className = 'px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 text-[10px] font-bold';
+        }
+        if (statusMsg) statusMsg.textContent = 'URLまたは現場キーが空欄のため、外部通信なしの単体ローカルモードとして保存しました。';
+        showToast('ローカル単体モード設定を保存しました');
+        return;
+      }
+
+      if (statusMsg) statusMsg.textContent = '⏳ Cloudflare Workers へ接続し、現場キーを確認・登録しています...';
+
+      try {
+        const regRes = await fetch(`${rawUrl}/api/sites/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            site_key: siteKey,
+            site_name: siteName,
+            contractor: getCurrentProject().contractor || '施工管理担当'
+          })
+        });
+        const regData = await regRes.json();
+        if (!regRes.ok || !regData.ok) {
+          throw new Error(regData.error || 'サーバー応答エラー');
+        }
+
+        const existingIdx = cloudSyncConfig.savedSites.findIndex(s => s.siteKey === siteKey);
+        const siteEntry = {
+          siteKey,
+          siteName: regData.site?.site_name || siteName,
+          contractor: regData.site?.contractor || '',
+          url: rawUrl
+        };
+        if (existingIdx >= 0) {
+          cloudSyncConfig.savedSites[existingIdx] = siteEntry;
+        } else {
+          cloudSyncConfig.savedSites.unshift(siteEntry);
+        }
+        cloudSyncConfig.connected = true;
+        saveCloudSyncConfig();
+        renderSavedSitesDropdown();
+
+        if (connBadge) {
+          connBadge.textContent = '🟢 接続OK';
+          connBadge.className = 'px-2 py-0.5 rounded-full bg-emerald-900 text-emerald-200 text-[10px] font-extrabold';
+        }
+        if (statusMsg) {
+          statusMsg.innerHTML = `✅ <strong>接続成功！</strong> 現場「<strong>${escapeHtml(siteEntry.siteName)}</strong>」（キー: <code class="text-amber-300">${escapeHtml(siteKey)}</code>）を端末に保存しました。`;
+        }
+        showToast(`クラウド接続成功：「${siteEntry.siteName}」を保存しました`);
+        await refreshCloudSharedMediaPool();
+      } catch (err) {
+        cloudSyncConfig.connected = false;
+        saveCloudSyncConfig();
+        if (connBadge) {
+          connBadge.textContent = '🔴 接続エラー';
+          connBadge.className = 'px-2 py-0.5 rounded-full bg-rose-900 text-rose-200 text-[10px] font-extrabold';
+        }
+        if (statusMsg) {
+          statusMsg.textContent = `❌ 接続に失敗しました：${err.message}（URLやネットワークを確認してください）`;
+        }
+        showToast('クラウド接続に失敗しました');
+      }
+    }
+
+    function dataUrlToBlob(dataUrl) {
+      const [header, base64] = dataUrl.split(',');
+      const mimeMatch = header.match(/:(.*?);/);
+      const mime = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+      const bin = atob(base64);
+      const u8 = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+      return new Blob([u8], { type: mime });
+    }
+
+    async function uploadDataUrlToCloudMedia(dataUrl, mediaType, mediaId, takenAt = '') {
+      const rawUrl = cloudSyncConfig.activeUrl;
+      const siteKey = cloudSyncConfig.activeSiteKey;
+      const blob = dataUrlToBlob(dataUrl);
+      const ext = mediaType === 'mamezu' ? 'png' : 'jpg';
+      const fd = new FormData();
+      fd.append('file', blob, `${mediaId}.${ext}`);
+      fd.append('media_type', mediaType);
+      fd.append('media_id', mediaId);
+      fd.append('taken_at', takenAt);
+      fd.append('uploaded_by', getCurrentProject().contractor || '');
+
+      const res = await fetch(`${rawUrl}/api/media/upload`, {
+        method: 'POST',
+        headers: { 'X-Site-Key': siteKey },
+        body: fd
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error || 'メディアアップロード失敗');
+      }
+      return json.media;
+    }
+
+    async function pushLedgerToCloud() {
+      const rawUrl = (cloudSyncConfig.activeUrl || '').trim();
+      const siteKey = (cloudSyncConfig.activeSiteKey || '').trim();
+      if (!rawUrl || !siteKey) {
+        showToast('先に接続URLと現場キーを設定・保存してください');
+        return;
+      }
+
+      const btn = document.getElementById('btn-cloud-push');
+      if (btn) btn.disabled = true;
+      showToast('☁️ 写真・豆図をR2へ、台帳データをD1へ同期中...');
+
+      try {
+        const proj = getCurrentProject();
+        const syncItems = [];
+
+        for (let i = 0; i < proj.photos.length; i++) {
+          const p = proj.photos[i];
+          let mediaId = p.cloudMediaId || '';
+          let mamezuMediaId = p.cloudMamezuMediaId || '';
+
+          if (p.imageDataUrl && p.imageDataUrl.startsWith('data:')) {
+            const upMediaId = mediaId || `med_ph_${p.id}`;
+            const uploaded = await uploadDataUrlToCloudMedia(p.imageDataUrl, 'photo', upMediaId, p.date || '');
+            mediaId = uploaded.media_id;
+            p.cloudMediaId = mediaId;
+            p.cloudStorageUrl = uploaded.storage_url;
+          }
+
+          if (p.mamezuDataUrl && p.mamezuDataUrl.startsWith('data:')) {
+            const upMzId = mamezuMediaId || `med_mz_${p.id}`;
+            const uploadedMz = await uploadDataUrlToCloudMedia(p.mamezuDataUrl, 'mamezu', upMzId, p.date || '');
+            mamezuMediaId = uploadedMz.media_id;
+            p.cloudMamezuMediaId = mamezuMediaId;
+            p.cloudMamezuUrl = uploadedMz.storage_url;
+          }
+
+          syncItems.push({
+            item_id: p.id,
+            source_type: p.sourceType || 'standalone',
+            pin_label: p.pinLabel || '',
+            phase_label: p.phaseLabel || '',
+            media_id: mediaId,
+            mamezu_media_id: mamezuMediaId,
+            work_type: p.workType || '',
+            location: p.location || '',
+            photo_date: p.date || '',
+            comment: p.comment || '',
+            chalkboard_json: p.chalkboard || {}
+          });
+        }
+
+        const res = await fetch(`${rawUrl}/api/ledger/sync`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Site-Key': siteKey
+          },
+          body: JSON.stringify({ items: syncItems })
+        });
+        const data = await res.json();
+        if (!res.ok || !data.ok) {
+          throw new Error(data.error || '台帳データ同期エラー');
+        }
+
+        cloudSyncConfig.connected = true;
+        saveCloudSyncConfig();
+        persistState();
+        await refreshCloudSharedMediaPool();
+        showToast(`✅ クラウドへ ${data.syncedCount} 件の台帳データを保存しました`);
+      } catch (err) {
+        showToast(`❌ クラウド保存エラー: ${err.message}`);
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    }
+
+    async function pullLedgerFromCloud() {
+      const rawUrl = (cloudSyncConfig.activeUrl || '').trim();
+      const siteKey = (cloudSyncConfig.activeSiteKey || '').trim();
+      if (!rawUrl || !siteKey) {
+        showToast('先に接続URLと現場キーを設定・保存してください');
+        return;
+      }
+
+      const btn = document.getElementById('btn-cloud-pull');
+      if (btn) btn.disabled = true;
+      showToast('☁️ クラウドから現場データを受信中...');
+
+      try {
+        const [ledgerRes, mediaRes] = await Promise.all([
+          fetch(`${rawUrl}/api/ledger`, { headers: { 'X-Site-Key': siteKey } }),
+          fetch(`${rawUrl}/api/media`, { headers: { 'X-Site-Key': siteKey } })
+        ]);
+        const ledgerData = await ledgerRes.json();
+        const mediaData = await mediaRes.json();
+
+        if (!ledgerRes.ok || !ledgerData.ok) {
+          throw new Error(ledgerData.error || '台帳データの取得に失敗しました');
+        }
+
+        const mediaMap = new Map();
+        (mediaData.media || []).forEach(m => mediaMap.set(m.media_id, m));
+
+        const items = ledgerData.items || [];
+        if (items.length === 0) {
+          showToast('クラウド上のこの現場キーにはまだ台帳データが登録されていません');
+          return;
+        }
+
+        const proj = getCurrentProject();
+        if (ledgerData.site?.site_name) {
+          proj.projectName = ledgerData.site.site_name;
+        }
+
+        proj.photos = items.map(it => {
+          const phMedia = it.media_id ? mediaMap.get(it.media_id) : null;
+          const mzMedia = it.mamezu_media_id ? mediaMap.get(it.mamezu_media_id) : null;
+          let cbObj = { customTitle: '', customBody: '', hideOnPhoto: false, customStyle: '' };
+          try {
+            if (it.chalkboard_json) {
+              cbObj = Object.assign(cbObj, typeof it.chalkboard_json === 'string' ? JSON.parse(it.chalkboard_json) : it.chalkboard_json);
+            }
+          } catch (_) {}
+
+          return {
+            id: it.item_id,
+            sourceType: it.source_type || 'standalone',
+            pinLabel: it.pin_label || '☁️ クラウド同期',
+            phaseLabel: it.phase_label || '【施工中】',
+            workType: it.work_type || '',
+            location: it.location || '',
+            date: it.photo_date || '',
+            comment: it.comment || '',
+            chalkboard: cbObj,
+            imageDataUrl: phMedia?.storage_url || null,
+            originalImageDataUrl: phMedia?.storage_url || null,
+            cloudMediaId: it.media_id || '',
+            cloudStorageUrl: phMedia?.storage_url || '',
+            mamezuDataUrl: mzMedia?.storage_url || null,
+            cloudMamezuMediaId: it.mamezu_media_id || '',
+            cloudMamezuUrl: mzMedia?.storage_url || '',
+            photoEditState: null,
+            mamezuState: null,
+            rotation: 0
+          };
+        });
+
+        cloudSyncConfig.connected = true;
+        saveCloudSyncConfig();
+        persistState();
+        renderAll();
+        closeModal('modal-cloud-sync');
+        showToast(`✅ クラウドから ${proj.photos.length} 件の台帳データを読み込みました`);
+      } catch (err) {
+        showToast(`❌ クラウド読込エラー: ${err.message}`);
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    }
+
+    async function refreshCloudSharedMediaPool() {
+      const grid = document.getElementById('cloud-shared-media-grid');
+      if (!grid) return;
+      const rawUrl = (cloudSyncConfig.activeUrl || '').trim();
+      const siteKey = (cloudSyncConfig.activeSiteKey || '').trim();
+      if (!rawUrl || !siteKey) {
+        grid.innerHTML = `<div class="col-span-full text-center text-slate-400 py-4">接続URLと現場キーを設定してください</div>`;
+        return;
+      }
+
+      grid.innerHTML = `<div class="col-span-full text-center text-cyan-300 py-4">読込中...</div>`;
+      try {
+        const res = await fetch(`${rawUrl}/api/media`, { headers: { 'X-Site-Key': siteKey } });
+        const data = await res.json();
+        if (!res.ok || !data.ok) throw new Error(data.error || '取得失敗');
+        const list = data.media || [];
+        if (list.length === 0) {
+          grid.innerHTML = `<div class="col-span-full text-center text-slate-400 py-4">まだ共有写真・豆図はありません（Pushまたは野帳からアップロードするとここに表示されます）</div>`;
+          return;
+        }
+        grid.innerHTML = list.map(m => {
+          const isMz = m.media_type === 'mamezu';
+          const proj = getCurrentProject();
+          const targetOptions = proj.photos.map((ph, idx) => `<option value="${escapeHtml(ph.id)}">No.${idx + 1} ${escapeHtml((ph.location || '').slice(0, 8))}</option>`).join('');
+          return `
+            <div class="bg-slate-900 border border-slate-700 rounded-lg overflow-hidden flex flex-col">
+              <div class="h-20 bg-slate-800 flex items-center justify-center overflow-hidden">
+                <img src="${escapeHtml(m.storage_url)}" alt="${escapeHtml(m.media_id)}" class="w-full h-full object-contain" />
+              </div>
+              <div class="p-1.5 flex flex-col gap-1">
+                <span class="text-[9px] font-bold ${isMz ? 'text-emerald-300' : 'text-sky-300'} truncate">
+                  ${isMz ? '📐 豆図・略図' : '📷 現場写真'} ${escapeHtml(m.taken_at || '')}
+                </span>
+                ${isMz ? `
+                  <div class="flex gap-1">
+                    <select id="mz-target-sel-${escapeHtml(m.media_id)}" class="min-w-0 flex-1 bg-slate-950 border border-slate-700 rounded text-[9px] text-white px-1 py-0.5">
+                      ${targetOptions}
+                    </select>
+                    <button type="button" onclick="importSharedMediaToLedger('${escapeHtml(m.media_id)}', '${escapeHtml(m.media_type)}', '${escapeHtml(m.storage_url)}', '${escapeHtml(m.taken_at || '')}', document.getElementById('mz-target-sel-${escapeHtml(m.media_id)}')?.value)"
+                            class="px-1.5 py-0.5 bg-emerald-700 hover:bg-emerald-600 text-white rounded text-[9px] font-bold cursor-pointer shrink-0">
+                      挿入
+                    </button>
+                  </div>
+                ` : `
+                  <button type="button" onclick="importSharedMediaToLedger('${escapeHtml(m.media_id)}', '${escapeHtml(m.media_type)}', '${escapeHtml(m.storage_url)}', '${escapeHtml(m.taken_at || '')}')"
+                          class="w-full py-1 bg-cyan-700 hover:bg-cyan-600 text-white rounded text-[10px] font-bold cursor-pointer">
+                    ＋ 台帳へ追加
+                  </button>
+                `}
+              </div>
+            </div>
+          `;
+        }).join('');
+      } catch (err) {
+        grid.innerHTML = `<div class="col-span-full text-center text-rose-300 py-4">取得エラー: ${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    function importSharedMediaToLedger(mediaId, mediaType, storageUrl, takenAt, targetPhotoId = null) {
+      if (mediaType === 'mamezu') {
+        const proj = getCurrentProject();
+        const target = (targetPhotoId ? proj.photos.find(p => p.id === targetPhotoId) : null) || proj.photos[0];
+        if (target) {
+          const idx = proj.photos.findIndex(p => p.id === target.id);
+          target.mamezuDataUrl = storageUrl;
+          target.cloudMamezuMediaId = mediaId;
+          target.cloudMamezuUrl = storageUrl;
+          persistState();
+          renderLedgerPages();
+          showToast(`No.${idx + 1} の写真枠に共有豆図を挿入しました`);
+        }
+        return;
+      }
+      const added = addPhotoItem({
+        sourceType: 'standalone',
+        pinLabel: '☁️ 共有プール写真',
+        date: takenAt || getTodayDateTimeStr(),
+        imageDataUrl: storageUrl,
+        silent: true
+      });
+      added.cloudMediaId = mediaId;
+      added.cloudStorageUrl = storageUrl;
+      persistState();
+      renderAll();
+      showToast('共有プールから台帳へ写真枠を追加しました');
+    }
+
+    async function toggleMamezuCloudPicker() {
+      const bar = document.getElementById('mz-cloud-picker-bar');
+      const grid = document.getElementById('mz-cloud-picker-grid');
+      if (!bar || !grid) return;
+      if (!bar.classList.contains('hidden')) {
+        bar.classList.add('hidden');
+        return;
+      }
+      bar.classList.remove('hidden');
+      const rawUrl = (cloudSyncConfig.activeUrl || '').trim();
+      const siteKey = (cloudSyncConfig.activeSiteKey || '').trim();
+      if (!rawUrl || !siteKey) {
+        grid.innerHTML = `<div class="col-span-full text-slate-300 text-[10px] py-2">先にヘッダーの「☁️ クラウド同期」で接続URLと現場キーを保存してください。</div>`;
+        return;
+      }
+      grid.innerHTML = `<div class="col-span-full text-cyan-200 text-[10px] py-2">読込中...</div>`;
+      try {
+        const res = await fetch(`${rawUrl}/api/media`, { headers: { 'X-Site-Key': siteKey } });
+        const data = await res.json();
+        const list = data.media || [];
+        if (list.length === 0) {
+          grid.innerHTML = `<div class="col-span-full text-slate-300 text-[10px] py-2">この現場キーに共有された豆図・画像がまだありません。</div>`;
+          return;
+        }
+        grid.innerHTML = list.map(m => `
+          <button type="button" onclick="applyCloudImageIntoCurrentMamezu('${escapeHtml(m.storage_url)}')"
+                  class="bg-slate-900 hover:border-emerald-400 border border-slate-700 rounded p-1 flex flex-col items-center gap-1 cursor-pointer">
+            <img src="${escapeHtml(m.storage_url)}" class="w-full h-14 object-contain bg-white rounded-xs" />
+            <span class="text-[9px] font-bold text-emerald-200 truncate w-full text-center">${m.media_type === 'mamezu' ? '📐 豆図' : '📷 写真'}</span>
+          </button>
+        `).join('');
+      } catch (err) {
+        grid.innerHTML = `<div class="col-span-full text-rose-300 text-[10px] py-2">取得エラー: ${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    function applyCloudImageIntoCurrentMamezu(storageUrl) {
+      const im = new Image();
+      im.crossOrigin = 'anonymous';
+      im.onload = () => {
+        const ratio = Math.min(440 / im.width, 250 / im.height, 1);
+        const w = Math.round(im.width * ratio);
+        const h = Math.round(im.height * ratio);
+        mzState.objects.push({
+          type: 'image',
+          x: Math.round((480 - w) / 2),
+          y: Math.round((280 - h) / 2),
+          w,
+          h,
+          dataUrl: storageUrl,
+          _img: im
+        });
+        mzState.selectedIndex = mzState.objects.length - 1;
+        mzState.tool = 'select';
+        document.getElementById('mz-cloud-picker-bar')?.classList.add('hidden');
+        syncMamezuUiControls();
+        renderMamezuCanvas();
+        showToast('野帳の豆図をキャンバスへ読み込みました');
+      };
+      im.src = storageUrl;
+    }
+
+    // ==================== ユーティリティ ＆ IndexedDB 永続化 ====================
+    function escapeHtml(str) {
+      return String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function getTodayDateTimeStr() {
+      const d = new Date();
+      return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    }
+
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      if (!t) return;
+      t.textContent = msg;
+      t.classList.remove('hidden');
+      clearTimeout(window.__ledgerToastTimer);
+      window.__ledgerToastTimer = setTimeout(() => t.classList.add('hidden'), 2400);
+    }
+
+    function openModal(id) {
+      const m = document.getElementById(id);
+      if (m) {
+        m.classList.remove('hidden');
+        m.classList.add('flex');
+      }
+    }
+
+    function closeModal(id) {
+      const m = document.getElementById(id);
+      if (m) {
+        m.classList.add('hidden');
+        m.classList.remove('flex');
+      }
+    }
+
+    const LedgerDB = {
+      db: null,
+      async init() {
+        if (this.db) return this.db;
+        return new Promise(resolve => {
+          try {
+            const req = indexedDB.open('genba_ledger_db_v1', 1);
+            req.onupgradeneeded = e => {
+              const db = e.target.result;
+              if (!db.objectStoreNames.contains('store')) {
+                db.createObjectStore('store', { keyPath: 'id' });
+              }
+            };
+            req.onsuccess = e => {
+              this.db = e.target.result;
+              resolve(this.db);
+            };
+            req.onerror = () => resolve(null);
+          } catch (_) {
+            resolve(null);
+          }
+        });
+      },
+      async save(stateObj) {
+        const db = await this.init();
+        if (!db) return;
+        return new Promise(resolve => {
+          try {
+            const tx = db.transaction('store', 'readwrite');
+            tx.objectStore('store').put({ id: 'root', data: JSON.parse(JSON.stringify(stateObj)), updatedAt: Date.now() });
+            tx.oncomplete = () => resolve(true);
+            tx.onerror = () => resolve(false);
+          } catch (_) {
+            resolve(false);
+          }
+        });
+      },
+      async load() {
+        const db = await this.init();
+        if (!db) return null;
+        return new Promise(resolve => {
+          try {
+            const tx = db.transaction('store', 'readonly');
+            const req = tx.objectStore('store').get('root');
+            req.onsuccess = () => resolve(req.result?.data || null);
+            req.onerror = () => resolve(null);
+          } catch (_) {
+            resolve(null);
+          }
+        });
+      }
+    };
+
+    // ==================== 用紙サイズ6種 ＆ 写真台構成15種マスター ====================
+    const PAPER_FORMATS = {
+      'A4-portrait':   { label: 'A4縦',     sheetClass: 'a4-ledger-sheet',           printBtn: 'A4縦印刷 / PDF',    pageCss: '@page { size: A4 portrait; margin: 0mm; }',       defaultTpl: '3rows' },
+      'A4-landscape':  { label: 'A4横',     sheetClass: 'a4-landscape-ledger-sheet', printBtn: 'A4横印刷 / PDF',    pageCss: '@page { size: A4 landscape; margin: 0mm; }',      defaultTpl: '2grid_h' },
+      'A3-portrait':   { label: 'A3縦',     sheetClass: 'a3-ledger-sheet',           printBtn: 'A3縦印刷 / PDF',    pageCss: '@page { size: A3 portrait; margin: 0mm; }',       defaultTpl: '4rows' },
+      'A3-landscape':  { label: 'A3横',     sheetClass: 'a3-landscape-ledger-sheet', printBtn: 'A3横印刷 / PDF',    pageCss: '@page { size: A3 landscape; margin: 0mm; }',      defaultTpl: '4grid_h' },
+      'yaecho-single': { label: '野帳1頁',  sheetClass: 'yaecho-single-ledger-sheet',printBtn: '野帳1頁印刷 / PDF', pageCss: '@page { size: 91mm 165mm; margin: 0mm; }',        defaultTpl: 'yaecho_single_card' },
+      'yaecho-spread': { label: '野帳見開', sheetClass: 'yaecho-spread-ledger-sheet',printBtn: '野帳見開印刷 / PDF',pageCss: '@page { size: 182mm 165mm; margin: 0mm; }',       defaultTpl: 'yaecho_spread' }
+    };
+
+    const TEMPLATE_ORDER = [
+      '3rows', '4rows', '6grid', 'before_after', 'public_3step',
+      '4grid', '4grid_h', '2grid_h', 'photo_only_2v', 'photo_only_4',
+      'photo_only_8', 'yaecho_single_card', 'yaecho_single_photo_only',
+      'yaecho_spread', 'yaecho_spread_x2'
+    ];
+
+    function getItemsPerPage(paperFormat, templateType) {
+      const isA3 = paperFormat.startsWith('A3');
+      const isLandscape = paperFormat.endsWith('landscape');
+      switch (templateType) {
+        case '3rows': return isA3 ? 4 : 3;
+        case '4rows': return isA3 ? 5 : 4;
+        case '6grid': return isA3 ? 9 : 6;
+        case 'before_after': return isA3 ? 6 : 4;
+        case 'public_3step': return 3;
+        case '4grid':
+        case '4grid_h': return 4;
+        case '2grid_h': return 2;
+        case 'photo_only_2v': return isA3 ? 4 : 2;
+        case 'photo_only_4': return 4;
+        case 'photo_only_8': return 8;
+        case 'yaecho_single_card':
+        case 'yaecho_single_photo_only': return 1;
+        case 'yaecho_spread': return (isA3 && isLandscape) ? 2 : 1;
+        case 'yaecho_spread_x2': return 2;
+        default: return 3;
+      }
+    }
+
+    function createDefaultChalkboardConfig() {
+      return {
+        titleOverride: '',
+        contractorOverride: '',
+        workLabel: '工種',
+        locLabel: '測点',
+        defaultBody: '',
+        showTitle: true,
+        showWork: true,
+        showLoc: true,
+        showBody: true,
+        showContractor: false,
+        showDate: true
+      };
+    }
+
+    function createDefaultProject(name = '○○新築工事 工事写真台帳') {
+      const nowStr = getTodayDateTimeStr();
+      return {
+        id: 'proj_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5),
+        projectName: name,
+        subtitle: '1F 躯体・安全設備・施工管理記録',
+        contractor: '施工管理担当',
+        paperFormat: 'A4-portrait',
+        templateType: '3rows',
+        templateByPaper: {
+          'A4-portrait': '3rows',
+          'A4-landscape': '2grid_h',
+          'A3-portrait': '4rows',
+          'A3-landscape': '4grid_h',
+          'yaecho-single': 'yaecho_single_card',
+          'yaecho-spread': 'yaecho_spread'
+        },
+        bindingMargin: 'none',
+        yaechoCropMode: 'full',
+        showMiniChalkboard: true,
+        chalkboardStyle: 'green_classic',
+        chalkboardConfig: createDefaultChalkboardConfig(),
+        photos: [
+          {
+            id: 'ph_demo_1',
+            sourceType: 'pin',
+            pinLabel: '📍 ピン① 連動',
+            phaseLabel: '【是正前】',
+            workType: '安全養生工',
+            location: '1F EVホール開口部',
+            date: nowStr,
+            comment: 'EV開口部周囲の仮設手すりおよび巾木の設置状況を確認。',
+            chalkboard: { customTitle: '', customBody: '手すり高 H=1,100\n巾木 H=150 確認', hideOnPhoto: false, customStyle: '' },
+            imageDataUrl: null,
+            originalImageDataUrl: null,
+            photoEditState: null,
+            mamezuDataUrl: null,
+            mamezuState: null,
+            rotation: 0
+          },
+          {
+            id: 'ph_demo_2',
+            sourceType: 'standalone',
+            pinLabel: '📷 ピン外・自由写真',
+            phaseLabel: '【施工中】',
+            workType: '躯体・配筋工',
+            location: '1F X3-Y1通り 地中梁',
+            date: nowStr,
+            comment: '主筋径・あばら筋ピッチおよびかぶり厚（40mm以上）が設計図通りであることを確認。',
+            chalkboard: { customTitle: '', customBody: '主筋 D19 / 帯筋 D10@150\nかぶり厚 実測45mm', hideOnPhoto: false, customStyle: '' },
+            imageDataUrl: null,
+            originalImageDataUrl: null,
+            photoEditState: null,
+            mamezuDataUrl: null,
+            mamezuState: null,
+            rotation: 0
+          },
+          {
+            id: 'ph_demo_3',
+            sourceType: 'standalone',
+            pinLabel: '📷 ピン外・自由写真',
+            phaseLabel: '【完了】',
+            workType: '安全設備工',
+            location: '南側 資材搬入・仮設通路',
+            date: nowStr,
+            comment: '親綱・カラーコーン・立入禁止表示の設置完了状況を記録。',
+            chalkboard: { customTitle: '', customBody: '', hideOnPhoto: false, customStyle: '' },
+            imageDataUrl: null,
+            originalImageDataUrl: null,
+            photoEditState: null,
+            mamezuDataUrl: null,
+            mamezuState: null,
+            rotation: 0
+          }
+        ]
+      };
+    }
+
+    let appState = {
+      projects: [createDefaultProject()],
+      currentProjectIndex: 0,
+      autoSave: true,
+      discordWebhookUrl: ''
+    };
+    let sourceFilter = 'all';
+
+    function getCurrentProject() {
+      const idx = Math.min(Math.max(0, appState.currentProjectIndex || 0), appState.projects.length - 1);
+      const proj = appState.projects[idx];
+      if (!proj.chalkboardConfig) proj.chalkboardConfig = createDefaultChalkboardConfig();
+      if (!proj.templateByPaper) proj.templateByPaper = {};
+      return proj;
+    }
+
+    function updateAutoSaveUi() {
+      const chk = document.getElementById('chk-autosave');
+      const st = document.getElementById('autosave-status');
+      if (chk) chk.checked = appState.autoSave !== false;
+      if (st) {
+        st.textContent = appState.autoSave !== false ? '● 自動保存: ON' : '○ 自動保存: OFF';
+        st.className = appState.autoSave !== false
+          ? 'text-emerald-300 font-bold whitespace-nowrap'
+          : 'text-amber-300 font-bold whitespace-nowrap';
+      }
+    }
+
+    function toggleAutoSave(checked) {
+      appState.autoSave = !!checked;
+      updateAutoSaveUi();
+      try {
+        localStorage.setItem(STORAGE_KEY_LEDGER, JSON.stringify({
+          autoSave: appState.autoSave,
+          currentProjectIndex: appState.currentProjectIndex,
+          discordWebhookUrl: appState.discordWebhookUrl || ''
+        }));
+      } catch (_) {}
+      if (appState.autoSave) {
+        persistState();
+        showToast('自動保存をONにしました');
+      } else {
+        showToast('自動保存をOFFにしました（保存時は「💾 保存」を押してください）');
+      }
+    }
+
+    async function persistState(force = false) {
+      try {
+        localStorage.setItem(STORAGE_KEY_LEDGER, JSON.stringify({
+          autoSave: appState.autoSave,
+          currentProjectIndex: appState.currentProjectIndex,
+          discordWebhookUrl: appState.discordWebhookUrl || ''
+        }));
+      } catch (_) {}
+
+      if (!force && appState.autoSave === false) return;
+      await LedgerDB.save(appState);
+    }
+
+    async function manualSaveNow() {
+      await persistState(true);
+      showToast('💾 現在の台帳状態を端末へ保存しました');
+    }
+
+    // ==================== プロジェクト切替モーダル ====================
+    function openProjectModal() {
+      renderProjectList();
+      openModal('modal-projects');
+    }
+
+    function renderProjectList() {
+      const body = document.getElementById('project-list-body');
+      if (!body) return;
+      body.innerHTML = appState.projects.map((pr, idx) => {
+        const active = idx === appState.currentProjectIndex;
+        return `
+          <div class="p-2.5 rounded-xl border ${active ? 'border-amber-500 bg-amber-950/35' : 'border-slate-700 bg-slate-800'} flex items-center justify-between gap-2">
+            <div onclick="switchProject(${idx})" class="flex-1 min-w-0 cursor-pointer">
+              <div class="font-extrabold text-white truncate">${escapeHtml(pr.projectName)}</div>
+              <div class="text-[10px] text-slate-400">写真枚数: ${pr.photos.length}枚 ／ 用紙: ${PAPER_FORMATS[pr.paperFormat]?.label || 'A4縦'}</div>
+            </div>
+            <div class="flex items-center gap-1 shrink-0">
+              ${active ? '<span class="px-2 py-0.5 bg-amber-600 rounded-full text-[10px] font-bold">選択中</span>' : ''}
+              ${appState.projects.length > 1 ? `<button onclick="deleteProject(${idx})" class="px-2 py-1 bg-rose-950 hover:bg-rose-700 text-rose-200 rounded-lg font-bold cursor-pointer">削除</button>` : ''}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function createNewProjectFromModal() {
+      const inp = document.getElementById('new-project-name-input');
+      const name = (inp?.value || '').trim() || `新規工事写真台帳 ${appState.projects.length + 1}`;
+      appState.projects.push(createDefaultProject(name));
+      appState.currentProjectIndex = appState.projects.length - 1;
+      if (inp) inp.value = '';
+      persistState();
+      closeModal('modal-projects');
+      renderAll();
+      showToast(`「${name}」を作成しました`);
+    }
+
+    function switchProject(idx) {
+      if (idx < 0 || idx >= appState.projects.length) return;
+      appState.currentProjectIndex = idx;
+      persistState();
+      closeModal('modal-projects');
+      renderAll();
+    }
+
+    function deleteProject(idx) {
+      if (appState.projects.length <= 1) return;
+      if (!confirm('この台帳プロジェクトを削除しますか？')) return;
+      appState.projects.splice(idx, 1);
+      appState.currentProjectIndex = Math.max(0, Math.min(appState.currentProjectIndex, appState.projects.length - 1));
+      persistState();
+      renderProjectList();
+      renderAll();
+    }
+
+    // ==================== 用紙サイズ・構成・各種表示切替 ====================
+    function updatePrintStyleRule(paperFormat) {
+      const info = PAPER_FORMATS[paperFormat] || PAPER_FORMATS['A4-portrait'];
+      const st = document.getElementById('dynamic-ledger-print-style');
+      if (st) st.textContent = info.pageCss;
+      const btn = document.getElementById('btn-print-label');
+      if (btn) btn.textContent = info.printBtn;
+      const scope = document.getElementById('tpl-paper-scope-label');
+      if (scope) scope.textContent = `${info.label}の写真台:`;
+      const cropBar = document.getElementById('yaecho-crop-bar');
+      if (cropBar) {
+        const showCrop = paperFormat.startsWith('yaecho') || getCurrentProject().templateType.startsWith('yaecho');
+        cropBar.classList.toggle('hidden', !showCrop);
+      }
+    }
+
+    function setPaperFormatByKey(paperKey) {
+      const proj = getCurrentProject();
+      if (!PAPER_FORMATS[paperKey]) return;
+      proj.paperFormat = paperKey;
+      if (!proj.templateByPaper) proj.templateByPaper = {};
+      const remembered = proj.templateByPaper[paperKey] || PAPER_FORMATS[paperKey].defaultTpl;
+      proj.templateType = remembered;
+      persistState();
+      renderAll();
+    }
+
+    function setTemplateType(tplId) {
+      const proj = getCurrentProject();
+      proj.templateType = tplId;
+      if (!proj.templateByPaper) proj.templateByPaper = {};
+      proj.templateByPaper[proj.paperFormat] = tplId;
+      persistState();
+      renderAll();
+    }
+
+    function stepTemplateType(delta) {
+      const proj = getCurrentProject();
+      const idx = TEMPLATE_ORDER.indexOf(proj.templateType);
+      const next = (idx + delta + TEMPLATE_ORDER.length) % TEMPLATE_ORDER.length;
+      setTemplateType(TEMPLATE_ORDER[next]);
+    }
+
+    function setBindingMargin(val) {
+      const proj = getCurrentProject();
+      proj.bindingMargin = val;
+      persistState();
+      renderLedgerPages();
+    }
+
+    function setYaechoCropMode(val) {
+      const proj = getCurrentProject();
+      proj.yaechoCropMode = val;
+      persistState();
+      renderLedgerPages();
+    }
+
+    function toggleMiniChalkboard(checked) {
+      const proj = getCurrentProject();
+      proj.showMiniChalkboard = !!checked;
+      persistState();
+      renderLedgerPages();
+    }
+
+    function setChalkboardStyle(val) {
+      const proj = getCurrentProject();
+      proj.chalkboardStyle = val;
+      persistState();
+      renderLedgerPages();
+    }
+
+    function setSourceFilter(flt) {
+      sourceFilter = flt;
+      document.querySelectorAll('.flt-btn').forEach(b => {
+        const active = b.id === `flt-btn-${flt}`;
+        b.classList.toggle('bg-sky-600', active);
+        b.classList.toggle('text-white', active);
+        b.classList.toggle('text-slate-300', !active);
+      });
+      renderLedgerPages();
+    }
+
+    // ==================== 写真アイテム操作 ＆ 一括圧縮読込 ====================
+    function compressImageFile(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = e => {
+          const im = new Image();
+          im.onload = () => {
+            const maxEdge = 1280;
+            let w = im.width;
+            let h = im.height;
+            if (Math.max(w, h) > maxEdge) {
+              const r = maxEdge / Math.max(w, h);
+              w = Math.round(w * r);
+              h = Math.round(h * r);
+            }
+            const c = document.createElement('canvas');
+            c.width = w;
+            c.height = h;
+            const ctx = c.getContext('2d');
+            ctx.drawImage(im, 0, 0, w, h);
+            resolve(c.toDataURL('image/jpeg', 0.85));
+          };
+          im.onerror = () => reject(new Error('画像デコード失敗'));
+          im.src = e.target.result;
+        };
+        reader.onerror = () => reject(new Error('ファイル読込失敗'));
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function addPhotoItem(opts = {}) {
+      const proj = getCurrentProject();
+      const item = {
+        id: 'ph_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+        sourceType: opts.sourceType || 'standalone',
+        pinLabel: opts.pinLabel || (opts.sourceType === 'pin' ? '📍 ピン連動' : '📷 ピン外・自由写真'),
+        phaseLabel: opts.phaseLabel || '【施工中】',
+        workType: opts.workType || '',
+        location: opts.location || '',
+        date: opts.date || getTodayDateTimeStr(),
+        comment: opts.comment || '',
+        chalkboard: { customTitle: '', customBody: '', hideOnPhoto: false, customStyle: '' },
+        imageDataUrl: opts.imageDataUrl || null,
+        originalImageDataUrl: opts.imageDataUrl || null,
+        photoEditState: null,
+        mamezuDataUrl: null,
+        mamezuState: null,
+        rotation: 0
+      };
+      proj.photos.push(item);
+      if (!opts.silent) {
+        persistState();
+        renderAll();
+        showToast('新しい写真枠を追加しました');
+      }
+      return item;
+    }
+
+    async function handleBatchImageUpload(event) {
+      const files = Array.from(event.target.files || []);
+      if (!files.length) return;
+      showToast(`📁 ${files.length}枚の写真を圧縮・読込中...`);
+      for (const file of files) {
+        try {
+          const dataUrl = await compressImageFile(file);
+          addPhotoItem({
+            sourceType: 'standalone',
+            location: file.name.replace(/\.[^.]+$/, ''),
+            imageDataUrl: dataUrl,
+            silent: true
+          });
+        } catch (_) {}
+      }
+      event.target.value = '';
+      persistState();
+      renderAll();
+      showToast(`✅ ${files.length}枚の写真を台帳へ追加しました`);
+    }
+
+    async function replaceSinglePhoto(photoId, event) {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      const proj = getCurrentProject();
+      const target = proj.photos.find(p => p.id === photoId);
+      if (!target) return;
+      try {
+        const dataUrl = await compressImageFile(file);
+        target.imageDataUrl = dataUrl;
+        target.originalImageDataUrl = dataUrl;
+        target.photoEditState = null;
+        persistState();
+        renderLedgerPages();
+        showToast('写真を差し替えました');
+      } catch (_) {
+        showToast('画像の読み込みに失敗しました');
+      }
+      event.target.value = '';
+    }
+
+    function rotatePhotoItem(photoId) {
+      const target = getCurrentProject().photos.find(p => p.id === photoId);
+      if (!target) return;
+      target.rotation = ((target.rotation || 0) + 90) % 360;
+      persistState();
+      renderLedgerPages();
+    }
+
+    function movePhotoItem(photoId, delta) {
+      const proj = getCurrentProject();
+      const idx = proj.photos.findIndex(p => p.id === photoId);
+      const next = idx + delta;
+      if (idx < 0 || next < 0 || next >= proj.photos.length) return;
+      const [moved] = proj.photos.splice(idx, 1);
+      proj.photos.splice(next, 0, moved);
+      persistState();
+      renderLedgerPages();
+    }
+
+    function deletePhotoItem(photoId) {
+      const proj = getCurrentProject();
+      proj.photos = proj.photos.filter(p => p.id !== photoId);
+      persistState();
+      renderAll();
+      showToast('写真枠を削除しました');
+    }
+
+    function updatePhotoField(photoId, field, value) {
+      const target = getCurrentProject().photos.find(p => p.id === photoId);
+      if (!target) return;
+      target[field] = value;
+      persistState();
+    }
+
+    // ==================== 電子小黒板オーバーレイ ＆ カスタマイズモーダル ====================
+    let editingChalkboardPhotoId = null;
+
+    function buildChalkboardOverlayHtml(photo, proj, interactive = true) {
+      if (proj.showMiniChalkboard === false) return '';
+      const cb = photo.chalkboard || {};
+      if (cb.hideOnPhoto) return '';
+
+      const cfg = proj.chalkboardConfig || createDefaultChalkboardConfig();
+      const styleId = cb.customStyle || proj.chalkboardStyle || 'green_classic';
+      const titleText = (cb.customTitle || '').trim() || (cfg.titleOverride || '').trim() || proj.projectName || '工事写真記録';
+      const contractorText = (cfg.contractorOverride || '').trim() || proj.contractor || '';
+      const bodyText = (cb.customBody || '').trim() || (cfg.defaultBody || '').trim();
+      const workLbl = cfg.workLabel || '工種';
+      const locLbl = cfg.locLabel || '測点';
+
+      const clickAttr = interactive
+        ? `onclick="event.stopPropagation(); openChalkboardEditor('${photo.id}');" title="クリックして黒板の記載内容を編集"`
+        : '';
+
+      if (styleId === 'compact_stamp') {
+        return `
+          <div ${clickAttr} class="chalkboard-${styleId} absolute bottom-1.5 left-1.5 right-1.5 px-2 py-0.5 rounded text-[9px] font-bold flex items-center justify-between gap-2 shadow cursor-pointer z-20">
+            <span class="truncate">${escapeHtml(titleText)} ｜ ${escapeHtml(photo.workType || '')} / ${escapeHtml(photo.location || '')}</span>
+            ${cfg.showDate !== false ? `<span class="font-mono shrink-0">${escapeHtml(photo.date || '')}</span>` : ''}
+          </div>
+        `;
+      }
+
+      return `
+        <div ${clickAttr} class="chalkboard-${styleId} absolute bottom-1.5 left-1.5 max-w-[66%] min-w-[132px] rounded px-2 py-1 text-[9px] leading-tight shadow-md cursor-pointer z-20 select-none">
+          ${cfg.showTitle !== false ? `<div class="font-extrabold border-b border-current/40 pb-0.5 mb-0.5 truncate">${escapeHtml(titleText)}</div>` : ''}
+          ${cfg.showWork !== false ? `<div class="truncate"><span class="opacity-80">${escapeHtml(workLbl)}:</span> <strong>${escapeHtml(photo.workType || '-')}</strong></div>` : ''}
+          ${cfg.showLoc !== false ? `<div class="truncate"><span class="opacity-80">${escapeHtml(locLbl)}:</span> <strong>${escapeHtml(photo.location || '-')}</strong></div>` : ''}
+          ${cfg.showBody !== false && bodyText ? `<div class="mt-0.5 pt-0.5 border-t border-current/30 whitespace-pre-wrap break-words text-[8.5px]">${escapeHtml(bodyText)}</div>` : ''}
+          <div class="mt-0.5 pt-0.5 border-t border-current/30 flex items-center justify-between gap-1 text-[8px] opacity-90">
+            ${cfg.showContractor ? `<span class="truncate">${escapeHtml(contractorText)}</span>` : '<span></span>'}
+            ${cfg.showDate !== false ? `<span class="font-mono shrink-0">${escapeHtml(photo.date || '')}</span>` : ''}
+          </div>
+        </div>
+      `;
+    }
+
+    function openChalkboardEditor(photoId) {
+      const proj = getCurrentProject();
+      const cfg = proj.chalkboardConfig || createDefaultChalkboardConfig();
+      editingChalkboardPhotoId = photoId;
+
+      const singleSec = document.getElementById('cb-single-photo-section');
+      const photo = photoId ? proj.photos.find(p => p.id === photoId) : null;
+
+      if (photo && singleSec) {
+        singleSec.classList.remove('hidden');
+        const idx = proj.photos.findIndex(p => p.id === photo.id);
+        const cb = photo.chalkboard || {};
+        document.getElementById('cb-target-photo-label').textContent = `📷 No.${idx + 1} の黒板記載内容`;
+        document.getElementById('cb-single-hide').checked = !!cb.hideOnPhoto;
+        document.getElementById('cb-single-title').value = cb.customTitle || '';
+        document.getElementById('cb-single-style').value = cb.customStyle || '';
+        document.getElementById('cb-single-work').value = photo.workType || '';
+        document.getElementById('cb-single-loc').value = photo.location || '';
+        document.getElementById('cb-single-date').value = photo.date || '';
+        document.getElementById('cb-single-body').value = cb.customBody || '';
+        document.getElementById('cb-single-lbl-work').textContent = cfg.workLabel || '工種';
+        document.getElementById('cb-single-lbl-loc').textContent = cfg.locLabel || '測点';
+      } else if (singleSec) {
+        singleSec.classList.add('hidden');
+      }
+
+      document.getElementById('cb-cfg-title').value = cfg.titleOverride || '';
+      document.getElementById('cb-cfg-contractor').value = cfg.contractorOverride || '';
+      document.getElementById('cb-cfg-lbl-work').value = cfg.workLabel || '工種';
+      document.getElementById('cb-cfg-lbl-loc').value = cfg.locLabel || '測点';
+      document.getElementById('cb-cfg-default-body').value = cfg.defaultBody || '';
+      document.getElementById('cb-cfg-show-title').checked = cfg.showTitle !== false;
+      document.getElementById('cb-cfg-show-work').checked = cfg.showWork !== false;
+      document.getElementById('cb-cfg-show-loc').checked = cfg.showLoc !== false;
+      document.getElementById('cb-cfg-show-body').checked = cfg.showBody !== false;
+      document.getElementById('cb-cfg-show-contractor').checked = !!cfg.showContractor;
+      document.getElementById('cb-cfg-show-date').checked = cfg.showDate !== false;
+
+      updateChalkboardPreviewFromModal();
+      openModal('modal-chalkboard');
+    }
+
+    function copyCommentToChalkboardBody() {
+      const proj = getCurrentProject();
+      const photo = editingChalkboardPhotoId ? proj.photos.find(p => p.id === editingChalkboardPhotoId) : null;
+      if (!photo) return;
+      document.getElementById('cb-single-body').value = photo.comment || '';
+      updateChalkboardPreviewFromModal();
+    }
+
+    function updateChalkboardPreviewFromModal() {
+      const proj = getCurrentProject();
+      const previewBox = document.getElementById('cb-live-preview-box');
+      if (!previewBox) return;
+
+      const tempCfg = {
+        titleOverride: document.getElementById('cb-cfg-title').value,
+        contractorOverride: document.getElementById('cb-cfg-contractor').value,
+        workLabel: document.getElementById('cb-cfg-lbl-work').value || '工種',
+        locLabel: document.getElementById('cb-cfg-lbl-loc').value || '測点',
+        defaultBody: document.getElementById('cb-cfg-default-body').value,
+        showTitle: document.getElementById('cb-cfg-show-title').checked,
+        showWork: document.getElementById('cb-cfg-show-work').checked,
+        showLoc: document.getElementById('cb-cfg-show-loc').checked,
+        showBody: document.getElementById('cb-cfg-show-body').checked,
+        showContractor: document.getElementById('cb-cfg-show-contractor').checked,
+        showDate: document.getElementById('cb-cfg-show-date').checked
+      };
+
+      const basePhoto = editingChalkboardPhotoId ? proj.photos.find(p => p.id === editingChalkboardPhotoId) : null;
+      const tempPhoto = {
+        id: 'preview',
+        workType: basePhoto ? document.getElementById('cb-single-work').value : '基礎配筋工',
+        location: basePhoto ? document.getElementById('cb-single-loc').value : '1F X1-Y2通り',
+        date: basePhoto ? document.getElementById('cb-single-date').value : getTodayDateTimeStr(),
+        chalkboard: {
+          customTitle: basePhoto ? document.getElementById('cb-single-title').value : '',
+          customBody: basePhoto ? document.getElementById('cb-single-body').value : '',
+          hideOnPhoto: basePhoto ? document.getElementById('cb-single-hide').checked : false,
+          customStyle: basePhoto ? document.getElementById('cb-single-style').value : ''
+        }
+      };
+
+      const tempProj = {
+        ...proj,
+        showMiniChalkboard: true,
+        chalkboardConfig: tempCfg
+      };
+
+      previewBox.innerHTML = `
+        <div class="relative w-56 h-32 bg-slate-700 rounded-lg border border-slate-600 overflow-hidden flex items-center justify-center">
+          <span class="text-slate-400 text-[10px]">写真プレビュー領域</span>
+          ${buildChalkboardOverlayHtml(tempPhoto, tempProj, false)}
+        </div>
+      `;
+    }
+
+    function saveChalkboardModalSettings() {
+      const proj = getCurrentProject();
+      proj.chalkboardConfig = {
+        titleOverride: document.getElementById('cb-cfg-title').value,
+        contractorOverride: document.getElementById('cb-cfg-contractor').value,
+        workLabel: document.getElementById('cb-cfg-lbl-work').value || '工種',
+        locLabel: document.getElementById('cb-cfg-lbl-loc').value || '測点',
+        defaultBody: document.getElementById('cb-cfg-default-body').value,
+        showTitle: document.getElementById('cb-cfg-show-title').checked,
+        showWork: document.getElementById('cb-cfg-show-work').checked,
+        showLoc: document.getElementById('cb-cfg-show-loc').checked,
+        showBody: document.getElementById('cb-cfg-show-body').checked,
+        showContractor: document.getElementById('cb-cfg-show-contractor').checked,
+        showDate: document.getElementById('cb-cfg-show-date').checked
+      };
+
+      if (editingChalkboardPhotoId) {
+        const photo = proj.photos.find(p => p.id === editingChalkboardPhotoId);
+        if (photo) {
+          photo.workType = document.getElementById('cb-single-work').value;
+          photo.location = document.getElementById('cb-single-loc').value;
+          photo.date = document.getElementById('cb-single-date').value;
+          photo.chalkboard = {
+            customTitle: document.getElementById('cb-single-title').value,
+            customBody: document.getElementById('cb-single-body').value,
+            hideOnPhoto: document.getElementById('cb-single-hide').checked,
+            customStyle: document.getElementById('cb-single-style').value
+          };
+        }
+      }
+
+      persistState();
+      closeModal('modal-chalkboard');
+      renderLedgerPages();
+      showToast('電子小黒板の記載内容を更新しました');
+    }
+
+    // ==================== 豆図 ＆ 写真直接ベクター編集エンジン ====================
+    const mzState = {
+      mode: 'mamezu',
+      targetPhotoId: null,
+      tool: 'pen',
+      color: '#dc2626',
+      lineStyle: 'solid',
+      arrowStart: 'none',
+      arrowEnd: 'filled',
+      hatchPattern: 'diag45',
+      bgType: 'grid',
+      bgTintColor: '#fef9c3',
+      bgAlpha: 35,
+      objects: [],
+      selectedIndex: -1,
+      basePhotoImg: null,
+      dragging: false,
+      dragMode: null,
+      startX: 0,
+      startY: 0,
+      lastX: 0,
+      lastY: 0,
+      currentObj: null
+    };
+
+    function openMamezuEditor(photoId, mode = 'mamezu') {
+      const proj = getCurrentProject();
+      const photo = proj.photos.find(p => p.id === photoId);
+      if (!photo) return;
+
+      mzState.mode = mode;
+      mzState.targetPhotoId = photoId;
+      mzState.selectedIndex = -1;
+      mzState.dragging = false;
+      mzState.currentObj = null;
+      mzState.basePhotoImg = null;
+
+      const header = document.getElementById('mz-modal-header');
+      const title = document.getElementById('mz-modal-title');
+      const presetBar = document.getElementById('mz-preset-bar');
+      const bgBar = document.getElementById('mz-bg-bar');
+      const removeBtn = document.getElementById('mz-btn-remove');
+      const saveBtn = document.getElementById('mz-btn-save-apply');
+
+      if (mode === 'photo') {
+        if (!photo.imageDataUrl) {
+          showToast('先に写真枠へ画像を入れてから「写真編集」を押してください');
+          return;
+        }
+        if (header) header.className = 'px-4 py-2.5 bg-amber-950 border-b border-amber-800 flex items-center justify-between shrink-0';
+        if (title) title.innerHTML = '<span>✏️</span> 写真への直接ベクター注釈・引き出し線編集';
+        if (presetBar) presetBar.classList.add('hidden');
+        if (bgBar) bgBar.classList.add('hidden');
+        if (removeBtn) removeBtn.textContent = '加筆をリセット（元写真に戻す）';
+        if (saveBtn) saveBtn.textContent = '✅ 編集後の写真を台帳へ反映';
+
+        mzState.objects = Array.isArray(photo.photoEditState) ? JSON.parse(JSON.stringify(photo.photoEditState)) : [];
+        const baseSrc = photo.originalImageDataUrl || photo.imageDataUrl;
+        const im = new Image();
+        im.crossOrigin = 'anonymous';
+        im.onload = () => {
+          mzState.basePhotoImg = im;
+          renderMamezuCanvas();
+        };
+        im.src = baseSrc;
+      } else {
+        if (header) header.className = 'px-4 py-2.5 bg-emerald-950 border-b border-emerald-800 flex items-center justify-between shrink-0';
+        if (title) title.innerHTML = '<span>📐</span> 豆図（施工位置・断面・略図）作成・編集';
+        if (presetBar) presetBar.classList.remove('hidden');
+        if (bgBar) bgBar.classList.remove('hidden');
+        if (removeBtn) removeBtn.textContent = '豆図を解除（なしにする）';
+        if (saveBtn) saveBtn.textContent = '✅ この豆図を台帳へ挿入';
+
+        if (photo.mamezuState) {
+          mzState.bgType = photo.mamezuState.bgType || 'grid';
+          mzState.bgTintColor = photo.mamezuState.bgTintColor || '#fef9c3';
+          mzState.bgAlpha = typeof photo.mamezuState.bgAlpha === 'number' ? photo.mamezuState.bgAlpha : 35;
+          mzState.objects = JSON.parse(JSON.stringify(photo.mamezuState.objects || []));
+        } else {
+          mzState.bgType = 'grid';
+          mzState.objects = [];
+        }
+      }
+
+      document.getElementById('mz-cloud-picker-bar')?.classList.add('hidden');
+      syncMamezuUiControls();
+      openModal('modal-mamezu');
+      renderMamezuCanvas();
+    }
+
+    function syncMamezuUiControls() {
+      document.querySelectorAll('.mz-tool-btn').forEach(b => {
+        const active = b.id === `mz-tool-${mzState.tool}`;
+        b.classList.toggle('bg-emerald-600', active);
+        b.classList.toggle('text-white', active);
+        b.classList.toggle('bg-slate-700', !active);
+        b.classList.toggle('text-slate-200', !active);
+      });
+      document.querySelectorAll('.mz-bg-btn').forEach(b => {
+        const active = b.id === `mz-bg-${mzState.bgType}`;
+        b.classList.toggle('bg-emerald-600', active);
+        b.classList.toggle('text-white', active);
+        b.classList.toggle('bg-slate-800', !active);
+        b.classList.toggle('text-slate-300', !active);
+      });
+      const delBtn = document.getElementById('mz-btn-del-sel');
+      if (delBtn) delBtn.classList.toggle('hidden', mzState.selectedIndex < 0);
+    }
+
+    function setMamezuTool(t) { mzState.tool = t; syncMamezuUiControls(); }
+    function setMamezuBgType(bg) { mzState.bgType = bg; syncMamezuUiControls(); renderMamezuCanvas(); }
+    function setMamezuBgTintColor(col) { mzState.bgTintColor = col; mzState.bgType = 'tint'; syncMamezuUiControls(); renderMamezuCanvas(); }
+    function setMamezuBgAlpha(val) {
+      mzState.bgAlpha = Number(val);
+      const lbl = document.getElementById('mz-bg-alpha-label');
+      if (lbl) lbl.textContent = `${mzState.bgAlpha}%`;
+      renderMamezuCanvas();
+    }
+
+    function setMamezuColor(col) {
+      mzState.color = col;
+      const pk = document.getElementById('mz-stroke-color-picker');
+      if (pk) pk.value = col;
+      if (mzState.objects[mzState.selectedIndex]) {
+        mzState.objects[mzState.selectedIndex].color = col;
+        renderMamezuCanvas();
+      }
+    }
+
+    function setMamezuLineStyle(val) {
+      mzState.lineStyle = val;
+      if (mzState.objects[mzState.selectedIndex]) {
+        mzState.objects[mzState.selectedIndex].lineStyle = val;
+        renderMamezuCanvas();
+      }
+    }
+
+    function setMamezuArrowStart(val) {
+      mzState.arrowStart = val;
+      if (mzState.objects[mzState.selectedIndex]) {
+        mzState.objects[mzState.selectedIndex].arrowStart = val;
+        renderMamezuCanvas();
+      }
+    }
+
+    function setMamezuArrowEnd(val) {
+      mzState.arrowEnd = val;
+      if (mzState.objects[mzState.selectedIndex]) {
+        mzState.objects[mzState.selectedIndex].arrowEnd = val;
+        renderMamezuCanvas();
+      }
+    }
+
+    function swapSelectedArrowEndpoints() {
+      const sel = mzState.objects[mzState.selectedIndex];
+      if (!sel || (sel.type !== 'line' && sel.type !== 'arrow')) return;
+      const tx = sel.x1, ty = sel.y1;
+      sel.x1 = sel.x2; sel.y1 = sel.y2;
+      sel.x2 = tx; sel.y2 = ty;
+      renderMamezuCanvas();
+    }
+
+    function setMamezuHatchPattern(val) {
+      mzState.hatchPattern = val;
+      if (mzState.objects[mzState.selectedIndex]) {
+        mzState.objects[mzState.selectedIndex].hatchPattern = val;
+        renderMamezuCanvas();
+      }
+    }
+
+    function updateSelectedMamezuText(val) {
+      const sel = mzState.objects[mzState.selectedIndex];
+      if (sel && (sel.type === 'text' || sel.type === 'leader')) {
+        sel.text = val;
+        renderMamezuCanvas();
+      }
+    }
+
+    function applyMamezuPreset(key) {
+      if (key === 'blank') {
+        mzState.objects = [];
+        mzState.selectedIndex = -1;
+        renderMamezuCanvas();
+        return;
+      }
+      const c = '#0f172a', r = '#dc2626', b = '#2563eb';
+      const presets = {
+        plan: [
+          { type: 'line', x1: 60, y1: 140, x2: 420, y2: 140, color: b, lineStyle: 'dashdot' },
+          { type: 'line', x1: 240, y1: 30, x2: 240, y2: 250, color: b, lineStyle: 'dashdot' },
+          { type: 'rect', x: 140, y: 75, w: 200, h: 130, color: c, lineStyle: 'solid' },
+          { type: 'text', x: 64, y: 134, text: 'Y1通り', color: b, fontSize: 13 },
+          { type: 'text', x: 246, y: 44, text: 'X3通り', color: b, fontSize: 13 }
+        ],
+        section: [
+          { type: 'rect', x: 110, y: 150, w: 260, h: 65, color: c, lineStyle: 'solid' },
+          { type: 'rect', x: 195, y: 65, w: 90, h: 85, color: c, lineStyle: 'solid' },
+          { type: 'hatch', x: 112, y: 152, w: 256, h: 61, color: '#64748b', lineStyle: 'solid', hatchPattern: 'diag45' },
+          { type: 'leader', x1: 240, y1: 110, x2: 330, y2: 65, text: '地中梁 450×800', color: r, lineStyle: 'solid', arrowStart: 'dot' }
+        ],
+        opening: [
+          { type: 'rect', x: 140, y: 70, w: 200, h: 140, color: c, lineStyle: 'solid' },
+          { type: 'line', x1: 140, y1: 70, x2: 340, y2: 210, color: r, lineStyle: 'dashed' },
+          { type: 'line', x1: 340, y1: 70, x2: 140, y2: 210, color: r, lineStyle: 'dashed' },
+          { type: 'text', x: 192, y: 145, text: '床開口養生', color: r, fontSize: 15 }
+        ],
+        sleeve: [
+          { type: 'rect', x: 90, y: 60, w: 300, h: 160, color: c, lineStyle: 'solid' },
+          { type: 'circle', x: 205, y: 105, w: 70, h: 70, color: b, lineStyle: 'solid' },
+          { type: 'leader', x1: 240, y1: 140, x2: 335, y2: 85, text: '貫通スリーブ φ100', color: r, lineStyle: 'solid', arrowStart: 'filled' }
+        ],
+        rebar: [
+          { type: 'rect', x: 130, y: 50, w: 220, h: 180, color: c, lineStyle: 'solid' },
+          { type: 'rect', x: 155, y: 75, w: 170, h: 130, color: r, lineStyle: 'solid' },
+          { type: 'leader', x1: 142, y1: 140, x2: 45, y2: 110, text: 'かぶり厚 40mm以上', color: b, lineStyle: 'solid', arrowStart: 'bar' }
+        ],
+        stair: [
+          { type: 'line', x1: 80, y1: 220, x2: 160, y2: 220, color: c, lineStyle: 'solid' },
+          { type: 'line', x1: 160, y1: 220, x2: 160, y2: 175, color: c, lineStyle: 'solid' },
+          { type: 'line', x1: 160, y1: 175, x2: 230, y2: 175, color: c, lineStyle: 'solid' },
+          { type: 'line', x1: 230, y1: 175, x2: 230, y2: 130, color: c, lineStyle: 'solid' },
+          { type: 'line', x1: 230, y1: 130, x2: 300, y2: 130, color: c, lineStyle: 'solid' },
+          { type: 'leader', x1: 230, y1: 152, x2: 310, y2: 195, text: '蹴上180 / 踏面260', color: r, lineStyle: 'solid', arrowStart: 'dot' }
+        ],
+        waterproof: [
+          { type: 'rect', x: 90, y: 170, w: 300, h: 45, color: c, lineStyle: 'solid' },
+          { type: 'rect', x: 90, y: 65, w: 55, h: 105, color: c, lineStyle: 'solid' },
+          { type: 'leader', x1: 150, y1: 115, x2: 220, y2: 80, text: '防水立上り H=300以上', color: r, lineStyle: 'solid', arrowStart: 'filled' }
+        ],
+        piping: [
+          { type: 'line', x1: 70, y1: 140, x2: 220, y2: 140, color: b, lineStyle: 'solid', arrowStart: 'dot', arrowEnd: 'filled' },
+          { type: 'line', x1: 220, y1: 140, x2: 395, y2: 140, color: r, lineStyle: 'dashed', arrowStart: 'none', arrowEnd: 'filled' },
+          { type: 'text', x: 100, y: 128, text: '給水管 VP25', color: b, fontSize: 13 },
+          { type: 'text', x: 255, y: 128, text: '排水管 VU75', color: r, fontSize: 13 }
+        ],
+        scaffold: [
+          { type: 'rect', x: 150, y: 55, w: 190, h: 175, color: c, lineStyle: 'solid' },
+          { type: 'line', x1: 115, y1: 45, x2: 115, y2: 235, color: b, lineStyle: 'solid' },
+          { type: 'leader', x1: 115, y1: 110, x2: 25, y2: 75, text: '壁つなぎ・親綱確認', color: r, lineStyle: 'solid', arrowStart: 'dot' }
+        ],
+        earthwork: [
+          { type: 'line', x1: 50, y1: 80, x2: 140, y2: 80, color: c, lineStyle: 'solid' },
+          { type: 'line', x1: 140, y1: 80, x2: 185, y2: 205, color: c, lineStyle: 'solid' },
+          { type: 'line', x1: 185, y1: 205, x2: 295, y2: 205, color: c, lineStyle: 'solid' },
+          { type: 'line', x1: 295, y1: 205, x2: 340, y2: 80, color: c, lineStyle: 'solid' },
+          { type: 'line', x1: 340, y1: 80, x2: 430, y2: 80, color: c, lineStyle: 'solid' },
+          { type: 'text', x: 198, y: 224, text: '砕石地業 t=100', color: b, fontSize: 12 }
+        ]
+      };
+      mzState.objects = JSON.parse(JSON.stringify(presets[key] || []));
+      mzState.selectedIndex = -1;
+      syncMamezuUiControls();
+      renderMamezuCanvas();
+    }
+
+    function loadMamezuBackgroundImage(event) {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = e => {
+        const im = new Image();
+        im.onload = () => {
+          const ratio = Math.min(340 / im.width, 210 / im.height, 1);
+          const w = Math.round(im.width * ratio);
+          const h = Math.round(im.height * ratio);
+          mzState.objects.push({
+            type: 'image',
+            x: Math.round((480 - w) / 2),
+            y: Math.round((280 - h) / 2),
+            w,
+            h,
+            dataUrl: e.target.result,
+            _img: im
+          });
+          mzState.selectedIndex = mzState.objects.length - 1;
+          mzState.tool = 'select';
+          syncMamezuUiControls();
+          renderMamezuCanvas();
+        };
+        im.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+      event.target.value = '';
+    }
+
+    function importSvgIntoMamezu(event) {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = e => {
+        const svgUrl = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(e.target.result);
+        const im = new Image();
+        im.onload = () => {
+          const ratio = Math.min(340 / (im.width || 300), 210 / (im.height || 200), 1);
+          const w = Math.round((im.width || 300) * ratio);
+          const h = Math.round((im.height || 200) * ratio);
+          mzState.objects.push({
+            type: 'image',
+            x: Math.round((480 - w) / 2),
+            y: Math.round((280 - h) / 2),
+            w,
+            h,
+            dataUrl: svgUrl,
+            _img: im
+          });
+          mzState.selectedIndex = mzState.objects.length - 1;
+          mzState.tool = 'select';
+          syncMamezuUiControls();
+          renderMamezuCanvas();
+        };
+        im.src = svgUrl;
+      };
+      reader.readAsText(file);
+      event.target.value = '';
+    }
+
+    function drawMzArrowHead(ctx, type, x, y, ang, col) {
+      if (!type || type === 'none') return;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(ang);
+      ctx.strokeStyle = col;
+      ctx.fillStyle = col;
+      ctx.lineWidth = 2.2;
+      ctx.setLineDash([]);
+      if (type === 'dot') { ctx.beginPath(); ctx.arc(0, 0, 4, 0, Math.PI * 2); ctx.fill(); }
+      else if (type === 'filled') { ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-11, -5); ctx.lineTo(-11, 5); ctx.closePath(); ctx.fill(); }
+      else if (type === 'open') { ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-11, -5); ctx.lineTo(-11, 5); ctx.closePath(); ctx.fill(); ctx.stroke(); }
+      else if (type === 'sharp') { ctx.beginPath(); ctx.moveTo(-10, -5); ctx.lineTo(0, 0); ctx.lineTo(-10, 5); ctx.stroke(); }
+      else if (type === 'arch_tick') { ctx.beginPath(); ctx.moveTo(-5, 6); ctx.lineTo(5, -6); ctx.stroke(); }
+      else if (type === 'bar') { ctx.beginPath(); ctx.moveTo(0, -7); ctx.lineTo(0, 7); ctx.stroke(); }
+      ctx.restore();
+    }
+
+    function getMzObjBounds(obj) {
+      if (obj.type === 'pen' && Array.isArray(obj.points) && obj.points.length > 0) {
+        const xs = obj.points.map(p => p.x), ys = obj.points.map(p => p.y);
+        const minX = Math.min(...xs), minY = Math.min(...ys);
+        return { x: minX, y: minY, w: Math.max(16, Math.max(...xs) - minX), h: Math.max(16, Math.max(...ys) - minY) };
+      }
+      if (obj.type === 'line' || obj.type === 'arrow') {
+        const minX = Math.min(obj.x1, obj.x2), minY = Math.min(obj.y1, obj.y2);
+        return { x: minX, y: minY, w: Math.max(16, Math.abs(obj.x2 - obj.x1)), h: Math.max(16, Math.abs(obj.y2 - obj.y1)) };
+      }
+      if (obj.type === 'leader') {
+        const shelfW = Math.max(55, (obj.text || '確認箇所').length * 13);
+        const endX = obj.x2 + (obj.x2 >= obj.x1 ? shelfW : -shelfW);
+        const minX = Math.min(obj.x1, obj.x2, endX), minY = Math.min(obj.y1, obj.y2 - 18);
+        return { x: minX, y: minY, w: Math.max(30, Math.max(obj.x1, obj.x2, endX) - minX), h: Math.max(24, Math.max(obj.y1, obj.y2) - minY + 4) };
+      }
+      if (obj.type === 'text') {
+        const fSize = obj.fontSize || 15;
+        return { x: obj.x, y: obj.y - fSize, w: Math.max(36, (obj.text || '文字').length * (fSize * 0.9)), h: fSize + 6 };
+      }
+      return { x: Math.min(obj.x, obj.x + (obj.w || 40)), y: Math.min(obj.y, obj.y + (obj.h || 40)), w: Math.max(16, Math.abs(obj.w || 40)), h: Math.max(16, Math.abs(obj.h || 40)) };
+    }
+
+    function renderMamezuCanvas() {
+      const canvas = document.getElementById('mamezu-canvas');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      const W = canvas.width, H = canvas.height;
+      ctx.clearRect(0, 0, W, H);
+
+      if (mzState.mode === 'photo' && mzState.basePhotoImg) {
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(0, 0, W, H);
+        const im = mzState.basePhotoImg;
+        const sc = Math.min(W / im.width, H / im.height);
+        ctx.drawImage(im, (W - im.width * sc) / 2, (H - im.height * sc) / 2, im.width * sc, im.height * sc);
+      } else {
+        if (mzState.bgType === 'tint') {
+          const hex = (mzState.bgTintColor || '#fef9c3').replace('#', '');
+          const r = parseInt(hex.slice(0, 2), 16) || 254, g = parseInt(hex.slice(2, 4), 16) || 249, b = parseInt(hex.slice(4, 6), 16) || 195;
+          ctx.fillStyle = `rgba(${r},${g},${b},${(mzState.bgAlpha ?? 35) / 100})`;
+          ctx.fillRect(0, 0, W, H);
+        } else {
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, W, H);
+        }
+        if (mzState.bgType === 'grid') {
+          ctx.strokeStyle = 'rgba(16, 185, 129, 0.24)';
+          ctx.lineWidth = 1;
+          for (let x = 0; x <= W; x += 20) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+          for (let y = 0; y <= H; y += 20) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+        } else if (mzState.bgType === 'dots') {
+          ctx.fillStyle = 'rgba(71, 85, 105, 0.42)';
+          for (let x = 10; x < W; x += 20) for (let y = 10; y < H; y += 20) { ctx.beginPath(); ctx.arc(x, y, 1.3, 0, Math.PI * 2); ctx.fill(); }
+        }
+      }
+
+      const list = mzState.currentObj ? [...mzState.objects, mzState.currentObj] : mzState.objects;
+      list.forEach((obj, idx) => {
+        const col = obj.color || '#dc2626';
+        ctx.save();
+        ctx.strokeStyle = col;
+        ctx.fillStyle = col;
+        ctx.lineWidth = 2.4;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        if (obj.lineStyle === 'dashed') ctx.setLineDash([8, 5]);
+        else if (obj.lineStyle === 'dotted') ctx.setLineDash([2, 4]);
+        else if (obj.lineStyle === 'dashdot') ctx.setLineDash([10, 4, 2, 4]);
+        else ctx.setLineDash([]);
+
+        if (obj.type === 'pen' && Array.isArray(obj.points)) {
+          ctx.beginPath();
+          obj.points.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+          ctx.stroke();
+        } else if (obj.type === 'line' || obj.type === 'arrow') {
+          ctx.beginPath(); ctx.moveTo(obj.x1, obj.y1); ctx.lineTo(obj.x2, obj.y2); ctx.stroke();
+          const ang = Math.atan2(obj.y2 - obj.y1, obj.x2 - obj.x1);
+          drawMzArrowHead(ctx, obj.arrowStart || 'none', obj.x1, obj.y1, ang + Math.PI, col);
+          drawMzArrowHead(ctx, obj.arrowEnd || (obj.type === 'arrow' ? 'filled' : 'none'), obj.x2, obj.y2, ang, col);
+        } else if (obj.type === 'leader') {
+          const dir = obj.x2 >= obj.x1 ? 1 : -1;
+          const shelfW = Math.max(55, (obj.text || '確認箇所').length * 13);
+          ctx.beginPath(); ctx.moveTo(obj.x1, obj.y1); ctx.lineTo(obj.x2, obj.y2); ctx.lineTo(obj.x2 + dir * shelfW, obj.y2); ctx.stroke();
+          drawMzArrowHead(ctx, obj.arrowStart || 'dot', obj.x1, obj.y1, Math.atan2(obj.y2 - obj.y1, obj.x2 - obj.x1) + Math.PI, col);
+          ctx.setLineDash([]);
+          ctx.font = 'bold 13px sans-serif';
+          ctx.textAlign = dir > 0 ? 'left' : 'right';
+          ctx.fillText(obj.text || '確認箇所', obj.x2 + dir * 4, obj.y2 - 5);
+        } else if (obj.type === 'rect') {
+          ctx.strokeRect(obj.x, obj.y, obj.w, obj.h);
+        } else if (obj.type === 'circle') {
+          ctx.beginPath(); ctx.ellipse(obj.x + obj.w / 2, obj.y + obj.h / 2, Math.abs(obj.w) / 2, Math.abs(obj.h) / 2, 0, 0, Math.PI * 2); ctx.stroke();
+        } else if (obj.type === 'cloud') {
+          ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(obj.x, obj.y, obj.w, obj.h, 16); else ctx.rect(obj.x, obj.y, obj.w, obj.h); ctx.stroke();
+        } else if (obj.type === 'hatch') {
+          ctx.save();
+          ctx.beginPath(); ctx.rect(obj.x, obj.y, obj.w, obj.h); ctx.clip();
+          const hPat = obj.hatchPattern || 'diag45';
+          ctx.lineWidth = 1.4;
+          if (hPat === 'diag45' || hPat === 'cross') {
+            for (let d = -obj.h; d < obj.w + obj.h; d += 10) { ctx.beginPath(); ctx.moveTo(obj.x + d, obj.y + obj.h); ctx.lineTo(obj.x + d + obj.h, obj.y); ctx.stroke(); }
+          }
+          if (hPat === 'cross') {
+            for (let d = -obj.h; d < obj.w + obj.h; d += 10) { ctx.beginPath(); ctx.moveTo(obj.x + d, obj.y); ctx.lineTo(obj.x + d + obj.h, obj.y + obj.h); ctx.stroke(); }
+          }
+          if (hPat === 'grid') {
+            for (let gx = obj.x; gx <= obj.x + obj.w; gx += 10) { ctx.beginPath(); ctx.moveTo(gx, obj.y); ctx.lineTo(gx, obj.y + obj.h); ctx.stroke(); }
+            for (let gy = obj.y; gy <= obj.y + obj.h; gy += 10) { ctx.beginPath(); ctx.moveTo(obj.x, gy); ctx.lineTo(obj.x + obj.w, gy); ctx.stroke(); }
+          }
+          if (hPat === 'dots') {
+            for (let gx = obj.x + 5; gx < obj.x + obj.w; gx += 9) for (let gy = obj.y + 5; gy < obj.y + obj.h; gy += 9) { ctx.beginPath(); ctx.arc(gx, gy, 1.5, 0, Math.PI * 2); ctx.fill(); }
+          }
+          ctx.restore();
+          ctx.strokeRect(obj.x, obj.y, obj.w, obj.h);
+        } else if (obj.type === 'text') {
+          ctx.setLineDash([]);
+          ctx.font = `bold ${obj.fontSize || 15}px sans-serif`;
+          ctx.fillText(obj.text || '確認箇所', obj.x, obj.y);
+        } else if (obj.type === 'image') {
+          if (obj._img) {
+            ctx.drawImage(obj._img, obj.x, obj.y, obj.w, obj.h);
+          } else if (obj.dataUrl) {
+            const im = new Image();
+            im.onload = () => { obj._img = im; renderMamezuCanvas(); };
+            im.src = obj.dataUrl;
+          }
+        }
+        ctx.restore();
+
+        if (!mzState.currentObj && idx === mzState.selectedIndex) {
+          const b = getMzObjBounds(obj);
+          ctx.save();
+          ctx.strokeStyle = '#2563eb';
+          ctx.lineWidth = 1.5;
+          ctx.setLineDash([4, 3]);
+          ctx.strokeRect(b.x - 4, b.y - 4, b.w + 8, b.h + 8);
+          ctx.restore();
+        }
+      });
+    }
+
+    function initMamezuCanvasEvents() {
+      const canvas = document.getElementById('mamezu-canvas');
+      if (!canvas || canvas.dataset.bound === '1') return;
+      canvas.dataset.bound = '1';
+      const getPt = e => {
+        const r = canvas.getBoundingClientRect();
+        const s = e.touches ? e.touches[0] : e;
+        return { x: Math.round(((s.clientX - r.left) / r.width) * canvas.width), y: Math.round(((s.clientY - r.top) / r.height) * canvas.height) };
+      };
+      const onDown = e => {
+        e.preventDefault();
+        const pt = getPt(e);
+        mzState.startX = mzState.lastX = pt.x;
+        mzState.startY = mzState.lastY = pt.y;
+        mzState.dragging = true;
+
+        if (mzState.tool === 'select') {
+          let hit = -1;
+          for (let i = mzState.objects.length - 1; i >= 0; i--) {
+            const b = getMzObjBounds(mzState.objects[i]);
+            if (pt.x >= b.x - 8 && pt.x <= b.x + b.w + 8 && pt.y >= b.y - 8 && pt.y <= b.y + b.h + 8) { hit = i; break; }
+          }
+          mzState.selectedIndex = hit;
+          mzState.dragMode = hit >= 0 ? 'move' : null;
+          syncMamezuUiControls();
+          renderMamezuCanvas();
+          return;
+        }
+        const labelText = document.getElementById('mamezu-text-stamp-input')?.value || '確認箇所';
+        if (mzState.tool === 'text') {
+          mzState.objects.push({ type: 'text', x: pt.x, y: pt.y, text: labelText, color: mzState.color, fontSize: 15 });
+          mzState.selectedIndex = mzState.objects.length - 1;
+          mzState.tool = 'select';
+          mzState.dragging = false;
+          syncMamezuUiControls();
+          renderMamezuCanvas();
+          return;
+        }
+        mzState.dragMode = 'draw';
+        if (mzState.tool === 'pen') mzState.currentObj = { type: 'pen', points: [pt], color: mzState.color, lineStyle: mzState.lineStyle };
+        else if (mzState.tool === 'line' || mzState.tool === 'arrow') mzState.currentObj = { type: mzState.tool, x1: pt.x, y1: pt.y, x2: pt.x, y2: pt.y, color: mzState.color, lineStyle: mzState.lineStyle, arrowStart: mzState.arrowStart, arrowEnd: mzState.tool === 'arrow' && mzState.arrowEnd === 'none' ? 'filled' : mzState.arrowEnd };
+        else if (mzState.tool === 'leader') mzState.currentObj = { type: 'leader', x1: pt.x, y1: pt.y, x2: pt.x + 30, y2: pt.y - 25, text: labelText, color: mzState.color, lineStyle: mzState.lineStyle, arrowStart: mzState.arrowStart === 'none' ? 'dot' : mzState.arrowStart };
+        else mzState.currentObj = { type: mzState.tool, x: pt.x, y: pt.y, w: 1, h: 1, color: mzState.color, lineStyle: mzState.lineStyle, hatchPattern: mzState.hatchPattern };
+        renderMamezuCanvas();
+      };
+      const onMove = e => {
+        if (!mzState.dragging) return;
+        e.preventDefault();
+        const pt = getPt(e);
+        const dx = pt.x - mzState.lastX, dy = pt.y - mzState.lastY;
+        mzState.lastX = pt.x; mzState.lastY = pt.y;
+        if (mzState.dragMode === 'move' && mzState.selectedIndex >= 0) {
+          const o = mzState.objects[mzState.selectedIndex];
+          if (o.type === 'pen') o.points.forEach(p => { p.x += dx; p.y += dy; });
+          else if (o.type === 'line' || o.type === 'arrow' || o.type === 'leader') { o.x1 += dx; o.y1 += dy; o.x2 += dx; o.y2 += dy; }
+          else { o.x += dx; o.y += dy; }
+          renderMamezuCanvas();
+        } else if (mzState.dragMode === 'draw' && mzState.currentObj) {
+          const o = mzState.currentObj;
+          if (o.type === 'pen') o.points.push(pt);
+          else if (o.type === 'line' || o.type === 'arrow' || o.type === 'leader') { o.x2 = pt.x; o.y2 = pt.y; }
+          else { o.w = pt.x - mzState.startX; o.h = pt.y - mzState.startY; }
+          renderMamezuCanvas();
+        }
+      };
+      const onUp = () => {
+        if (!mzState.dragging) return;
+        mzState.dragging = false;
+        if (mzState.dragMode === 'draw' && mzState.currentObj) {
+          const o = mzState.currentObj;
+          if (['rect', 'circle', 'cloud', 'hatch'].includes(o.type)) {
+            if (o.w < 0) { o.x += o.w; o.w = Math.abs(o.w); }
+            if (o.h < 0) { o.y += o.h; o.h = Math.abs(o.h); }
+          }
+          mzState.objects.push(o);
+          mzState.currentObj = null;
+          mzState.selectedIndex = mzState.objects.length - 1;
+          if (o.type !== 'pen') mzState.tool = 'select';
+          syncMamezuUiControls();
+          renderMamezuCanvas();
+        }
+        mzState.dragMode = null;
+      };
+      canvas.addEventListener('mousedown', onDown);
+      canvas.addEventListener('mousemove', onMove);
+      window.addEventListener('mouseup', onUp);
+      canvas.addEventListener('touchstart', onDown, { passive: false });
+      canvas.addEventListener('touchmove', onMove, { passive: false });
+      window.addEventListener('touchend', onUp);
+    }
+
+    function undoMamezuCanvas() { mzState.objects.pop(); mzState.selectedIndex = -1; syncMamezuUiControls(); renderMamezuCanvas(); }
+    function deleteSelectedMamezuObject() { if (mzState.selectedIndex >= 0) { mzState.objects.splice(mzState.selectedIndex, 1); mzState.selectedIndex = -1; syncMamezuUiControls(); renderMamezuCanvas(); } }
+    function clearMamezuCanvas() { mzState.objects = []; mzState.selectedIndex = -1; syncMamezuUiControls(); renderMamezuCanvas(); }
+
+    function buildMamezuSvgString() {
+      const W = 480, H = 280;
+      const items = mzState.objects.map(o => {
+        const col = o.color || '#dc2626';
+        if (o.type === 'pen') return `<polyline points="${o.points.map(p => `${p.x},${p.y}`).join(' ')}" fill="none" stroke="${col}" stroke-width="2.4"/>`;
+        if (o.type === 'line' || o.type === 'arrow') return `<line x1="${o.x1}" y1="${o.y1}" x2="${o.x2}" y2="${o.y2}" stroke="${col}" stroke-width="2.4"/>`;
+        if (o.type === 'rect' || o.type === 'hatch') return `<rect x="${o.x}" y="${o.y}" width="${o.w}" height="${o.h}" fill="none" stroke="${col}" stroke-width="2.2"/>`;
+        if (o.type === 'circle') return `<ellipse cx="${o.x + o.w / 2}" cy="${o.y + o.h / 2}" rx="${o.w / 2}" ry="${o.h / 2}" fill="none" stroke="${col}" stroke-width="2.2"/>`;
+        if (o.type === 'text') return `<text x="${o.x}" y="${o.y}" font-size="15" font-weight="bold" fill="${col}">${escapeHtml(o.text || '')}</text>`;
+        return '';
+      }).join('');
+      return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><rect width="${W}" height="${H}" fill="#fff"/>${items}</svg>`;
+    }
+
+    function downloadMamezuPng() {
+      mzState.selectedIndex = -1;
+      renderMamezuCanvas();
+      const canvas = document.getElementById('mamezu-canvas');
+      const a = document.createElement('a');
+      a.href = canvas.toDataURL('image/png');
+      a.download = `ledger_mamezu_${Date.now()}.png`;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    }
+
+    function downloadMamezuSvg() {
+      const svg = buildMamezuSvgString();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
+      a.download = `ledger_mamezu_${Date.now()}.svg`;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    }
+
+    function exportMamezuIntoFieldnoteJson(event) {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = e => {
+        try {
+          const parsed = JSON.parse(e.target.result);
+          const svgUrl = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(buildMamezuSvgString());
+          const newObj = {
+            id: 'obj_mz_' + Date.now(),
+            type: 'image',
+            title: '台帳豆図SVG',
+            src: svgUrl,
+            x: 65,
+            y: 75,
+            w: 240,
+            h: 140,
+            baseW: 240,
+            baseH: 140,
+            scalePct: 100,
+            rotation: 0
+          };
+          if (Array.isArray(parsed.notebooks) && parsed.notebooks[0]?.pages?.[0]) {
+            const nb = parsed.notebooks[parsed.currentNotebookIndex || 0] || parsed.notebooks[0];
+            const pg = nb.pages[nb.currentPageIndex || 0] || nb.pages[0];
+            if (!Array.isArray(pg.objects)) pg.objects = [];
+            pg.objects.push(newObj);
+          } else if (Array.isArray(parsed.pages) && parsed.pages[0]) {
+            const pg = parsed.pages[parsed.currentPageIndex || 0] || parsed.pages[0];
+            if (!Array.isArray(pg.objects)) pg.objects = [];
+            pg.objects.push(newObj);
+          }
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(new Blob([JSON.stringify(parsed, null, 2)], { type: 'application/json' }));
+          a.download = `fieldnote_with_mamezu_${Date.now()}.json`;
+          document.body.appendChild(a); a.click(); document.body.removeChild(a);
+          showToast('野帳JSONへ豆図SVGを挿入してダウンロードしました');
+        } catch (_) {
+          showToast('野帳JSONファイルの読み込みに失敗しました');
+        }
+      };
+      reader.readAsText(file);
+      event.target.value = '';
+    }
+
+    function removeMamezuFromPhoto() {
+      const proj = getCurrentProject();
+      const photo = proj.photos.find(p => p.id === mzState.targetPhotoId);
+      if (!photo) return;
+      if (mzState.mode === 'photo') {
+        if (photo.originalImageDataUrl) photo.imageDataUrl = photo.originalImageDataUrl;
+        photo.photoEditState = null;
+        showToast('写真への加筆をリセットしました');
+      } else {
+        photo.mamezuDataUrl = null;
+        photo.mamezuState = null;
+        showToast('豆図を解除しました');
+      }
+      persistState();
+      closeModal('modal-mamezu');
+      renderLedgerPages();
+    }
+
+    function saveMamezuToPhoto() {
+      const proj = getCurrentProject();
+      const photo = proj.photos.find(p => p.id === mzState.targetPhotoId);
+      if (!photo) return;
+
+      mzState.selectedIndex = -1;
+      renderMamezuCanvas();
+      const canvas = document.getElementById('mamezu-canvas');
+      const pngDataUrl = canvas.toDataURL('image/png');
+      const serializedObjs = mzState.objects.map(o => { const c = { ...o }; delete c._img; return c; });
+
+      if (mzState.mode === 'photo') {
+        if (!photo.originalImageDataUrl) photo.originalImageDataUrl = photo.imageDataUrl;
+        photo.imageDataUrl = pngDataUrl;
+        photo.photoEditState = serializedObjs;
+        showToast('編集後の写真を台帳へ反映しました');
+      } else {
+        photo.mamezuDataUrl = pngDataUrl;
+        photo.mamezuState = {
+          bgType: mzState.bgType,
+          bgTintColor: mzState.bgTintColor,
+          bgAlpha: mzState.bgAlpha,
+          objects: serializedObjs
+        };
+        showToast('豆図を台帳へ挿入しました');
+      }
+      persistState();
+      closeModal('modal-mamezu');
+      renderLedgerPages();
+    }
+
+    // ==================== 台帳カード ＆ ページ描画 ====================
+    function buildPhotoImageAreaHtml(photo, proj, idx, heightClass = 'h-48') {
+      const rotStyle = photo.rotation ? `transform: rotate(${photo.rotation}deg);` : '';
+      const imgBody = photo.imageDataUrl
+        ? `<img src="${escapeHtml(photo.imageDataUrl)}" alt="写真${idx + 1}" style="${rotStyle}" class="w-full h-full object-contain transition-transform" />`
+        : `<div class="w-full h-full flex flex-col items-center justify-center text-slate-400 bg-slate-100 border-2 border-dashed border-slate-300 rounded">
+             <span class="text-2xl">📷</span>
+             <span class="text-[11px] font-bold mt-1">写真未挿入（クリックして読込）</span>
+           </div>`;
+
+      return `
+        <div class="relative ${heightClass} bg-slate-900 rounded overflow-hidden flex items-center justify-center group">
+          ${imgBody}
+          ${buildChalkboardOverlayHtml(photo, proj, true)}
+
+          <!-- 操作ホバーバー（印刷時非表示） -->
+          <div class="no-print absolute top-1.5 right-1.5 flex flex-wrap items-center gap-1 opacity-95 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity z-30">
+            <label class="relative overflow-hidden px-2 py-0.5 bg-sky-600 hover:bg-sky-500 text-white rounded text-[10px] font-bold cursor-pointer shadow">
+              <span>📷 読込</span>
+              <input type="file" accept="image/*" onchange="replaceSinglePhoto('${photo.id}', event)" class="absolute inset-0 opacity-0 cursor-pointer" />
+            </label>
+            <button onclick="openChalkboardEditor('${photo.id}')" class="px-2 py-0.5 bg-emerald-700 hover:bg-emerald-600 text-white rounded text-[10px] font-bold cursor-pointer shadow">
+              🟩 黒板
+            </button>
+            <button onclick="openMamezuEditor('${photo.id}', 'photo')" class="px-2 py-0.5 bg-amber-600 hover:bg-amber-500 text-white rounded text-[10px] font-bold cursor-pointer shadow">
+              ✏️ 写真編集
+            </button>
+            <button onclick="openMamezuEditor('${photo.id}', 'mamezu')" class="px-2 py-0.5 bg-teal-700 hover:bg-teal-600 text-white rounded text-[10px] font-bold cursor-pointer shadow">
+              📐 豆図
+            </button>
+            <button onclick="rotatePhotoItem('${photo.id}')" class="px-1.5 py-0.5 bg-slate-800 hover:bg-slate-700 text-white rounded text-[10px] font-bold cursor-pointer shadow" title="90°回転">🔄</button>
+            <button onclick="movePhotoItem('${photo.id}', -1)" class="px-1.5 py-0.5 bg-slate-800 hover:bg-slate-700 text-white rounded text-[10px] font-bold cursor-pointer shadow" title="上へ移動">↑</button>
+            <button onclick="movePhotoItem('${photo.id}', 1)" class="px-1.5 py-0.5 bg-slate-800 hover:bg-slate-700 text-white rounded text-[10px] font-bold cursor-pointer shadow" title="下へ移動">↓</button>
+            <button onclick="deletePhotoItem('${photo.id}')" class="px-1.5 py-0.5 bg-rose-700 hover:bg-rose-600 text-white rounded text-[10px] font-bold cursor-pointer shadow" title="削除">🗑️</button>
+          </div>
+        </div>
+      `;
+    }
+
+    function buildStandardRowCardHtml(photo, proj, idx, isCompact = false) {
+      const cfg = proj.chalkboardConfig || createDefaultChalkboardConfig();
+      const workLbl = cfg.workLabel || '工種';
+      const locLbl = cfg.locLabel || '測点';
+      const imgH = isCompact ? 'h-36' : 'h-48';
+
+      const mamezuBox = photo.mamezuDataUrl
+        ? `<div onclick="openMamezuEditor('${photo.id}', 'mamezu')" title="クリックして豆図を再編集"
+                class="w-28 shrink-0 border border-slate-300 rounded bg-white p-1 flex flex-col items-center justify-center cursor-pointer hover:border-emerald-500">
+             <img src="${escapeHtml(photo.mamezuDataUrl)}" alt="豆図" class="w-full h-20 object-contain" />
+             <span class="text-[8px] font-bold text-emerald-800 mt-0.5">📐 豆図（クリック編集）</span>
+           </div>`
+        : `<button onclick="openMamezuEditor('${photo.id}', 'mamezu')"
+                   class="no-print w-20 shrink-0 border border-dashed border-slate-300 hover:border-emerald-500 rounded bg-slate-50 hover:bg-emerald-50/50 flex flex-col items-center justify-center text-[10px] font-bold text-slate-500 hover:text-emerald-700 cursor-pointer p-1">
+             <span>📐</span><span>＋豆図</span>
+           </button>`;
+
+      return `
+        <div class="grid grid-cols-12 border border-slate-400 rounded-xs overflow-hidden bg-white flex-1 min-h-0">
+          <!-- 左6列：写真＋電子小黒板 -->
+          <div class="col-span-6 p-2 border-r border-slate-400 flex flex-col justify-center">
+            ${buildPhotoImageAreaHtml(photo, proj, idx, imgH)}
+          </div>
+
+          <!-- 右6列：工種・測点・日時 ＋ 最大化メモ欄 ＋ 豆図 -->
+          <div class="col-span-6 p-2 bg-slate-50/70 flex flex-col gap-1.5 text-xs">
+            <div class="flex items-center justify-between border-b border-slate-300 pb-1 text-[10px]">
+              <div class="flex items-center gap-1.5">
+                <span class="font-black text-slate-800">No.${idx + 1}</span>
+                <span class="px-1.5 py-0.2 rounded font-bold ${photo.sourceType === 'pin' ? 'bg-indigo-100 text-indigo-800' : 'bg-amber-100 text-amber-900'}">
+                  ${escapeHtml(photo.pinLabel || '')}
+                </span>
+                ${proj.templateType === 'public_3step' || proj.templateType === 'before_after' ? `
+                  <input type="text" value="${escapeHtml(photo.phaseLabel || '')}"
+                         oninput="updatePhotoField('${photo.id}', 'phaseLabel', this.value)"
+                         class="w-20 bg-emerald-100 text-emerald-900 font-extrabold px-1 rounded outline-none" />
+                ` : ''}
+              </div>
+              <input type="text" value="${escapeHtml(photo.date || '')}"
+                     oninput="updatePhotoField('${photo.id}', 'date', this.value)"
+                     class="w-28 text-right font-mono text-slate-600 bg-transparent border-b border-slate-300 outline-none" />
+            </div>
+
+            <div class="grid grid-cols-2 gap-1.5 text-[11px]">
+              <div class="flex items-center gap-1">
+                <span class="text-slate-500 font-bold shrink-0">${escapeHtml(workLbl)}:</span>
+                <input type="text" value="${escapeHtml(photo.workType || '')}" placeholder="工種を入力"
+                       oninput="updatePhotoField('${photo.id}', 'workType', this.value)"
+                       class="min-w-0 flex-1 bg-white border border-slate-300 rounded px-1.5 py-0.5 font-bold text-slate-900 outline-none focus:border-emerald-500" />
+              </div>
+              <div class="flex items-center gap-1">
+                <span class="text-slate-500 font-bold shrink-0">${escapeHtml(locLbl)}:</span>
+                <input type="text" value="${escapeHtml(photo.location || '')}" placeholder="測点・箇所"
+                       oninput="updatePhotoField('${photo.id}', 'location', this.value)"
+                       class="min-w-0 flex-1 bg-white border border-slate-300 rounded px-1.5 py-0.5 font-bold text-slate-900 outline-none focus:border-emerald-500" />
+              </div>
+            </div>
+
+            <!-- メモ欄（最大化） ＋ 右側豆図枠 -->
+            <div class="flex-1 min-h-0 flex gap-1.5">
+              <div class="flex-1 flex flex-col min-h-0">
+                <textarea oninput="updatePhotoField('${photo.id}', 'comment', this.value)"
+                          placeholder="施工状況・確認内容・寸法実測値などを自由に入力..."
+                          class="no-print-textarea w-full flex-1 bg-white border border-slate-300 rounded p-1.5 text-xs text-slate-900 leading-snug outline-none focus:border-emerald-500 resize-none">${escapeHtml(photo.comment || '')}</textarea>
+                <div class="print-only-memo hidden text-xs text-slate-900 leading-snug p-1">${escapeHtml(photo.comment || '')}</div>
+              </div>
+              ${mamezuBox}
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function buildGridCardHtml(photo, proj, idx, photoOnly = false, imgH = 'h-44') {
+      if (photoOnly) {
+        return `
+          <div class="border border-slate-400 rounded-xs p-1.5 bg-white flex flex-col justify-center">
+            ${buildPhotoImageAreaHtml(photo, proj, idx, imgH)}
+          </div>
+        `;
+      }
+      return `
+        <div class="border border-slate-400 rounded-xs p-2 bg-white flex flex-col gap-1.5">
+          ${buildPhotoImageAreaHtml(photo, proj, idx, imgH)}
+          <div class="flex items-center justify-between gap-1 text-[10px] border-t border-slate-300 pt-1">
+            <span class="font-black text-slate-800 shrink-0">No.${idx + 1}</span>
+            <input type="text" value="${escapeHtml(photo.workType || '')}" placeholder="工種"
+                   oninput="updatePhotoField('${photo.id}', 'workType', this.value)"
+                   class="w-20 bg-slate-50 border border-slate-300 rounded px-1 py-0.5 font-bold outline-none" />
+            <input type="text" value="${escapeHtml(photo.location || '')}" placeholder="測点・タイトル"
+                   oninput="updatePhotoField('${photo.id}', 'location', this.value)"
+                   class="flex-1 min-w-0 bg-slate-50 border border-slate-300 rounded px-1 py-0.5 font-bold outline-none" />
+          </div>
+          <textarea rows="2" oninput="updatePhotoField('${photo.id}', 'comment', this.value)"
+                    placeholder="メモ..."
+                    class="no-print-textarea w-full bg-slate-50 border border-slate-300 rounded px-1.5 py-1 text-[11px] leading-snug outline-none resize-none">${escapeHtml(photo.comment || '')}</textarea>
+          <div class="print-only-memo hidden text-[11px] text-slate-900 leading-snug">${escapeHtml(photo.comment || '')}</div>
+        </div>
+      `;
+    }
+
+    function buildYaechoCardHtml(photo, proj, idx, mode = 'spread') {
+      if (mode === 'single_photo_only') {
+        return `
+          <div class="flex-1 flex flex-col justify-center">
+            ${buildPhotoImageAreaHtml(photo, proj, idx, 'h-full min-h-[135mm]')}
+          </div>
+        `;
+      }
+      if (mode === 'single_card') {
+        return `
+          <div class="flex-1 flex flex-col gap-1.5 min-h-0">
+            ${buildPhotoImageAreaHtml(photo, proj, idx, 'h-[72mm]')}
+            <div class="flex-1 yaecho-ledger-grid border border-emerald-600/60 rounded p-1.5 flex flex-col gap-1 text-[10px]">
+              <div class="flex items-center justify-between font-bold text-emerald-950 border-b border-emerald-600/50 pb-0.5">
+                <span>No.${idx + 1} ${escapeHtml(photo.workType || '')}</span>
+                <span class="font-mono text-[9px]">${escapeHtml(photo.date || '')}</span>
+              </div>
+              <input type="text" value="${escapeHtml(photo.location || '')}" placeholder="測点・箇所"
+                     oninput="updatePhotoField('${photo.id}', 'location', this.value)"
+                     class="w-full bg-transparent border-b border-emerald-500/50 font-bold text-slate-900 outline-none" />
+              <textarea oninput="updatePhotoField('${photo.id}', 'comment', this.value)"
+                        placeholder="野帳メモ..."
+                        class="no-print-textarea w-full flex-1 bg-transparent text-[10px] leading-relaxed outline-none resize-none">${escapeHtml(photo.comment || '')}</textarea>
+              <div class="print-only-memo hidden text-[10px] leading-relaxed">${escapeHtml(photo.comment || '')}</div>
+            </div>
+          </div>
+        `;
+      }
+
+      // 野帳見開き（左右分割）
+      return `
+        <div class="flex-1 grid grid-cols-12 gap-2 relative min-h-0 yaecho-ledger-grid border border-emerald-700/60 rounded p-2">
+          <div class="pointer-events-none absolute inset-y-0 left-1/2 -translate-x-1/2 w-4 yaecho-center-crease border-x border-slate-300/60"></div>
+          <!-- 左頁：写真 -->
+          <div class="col-span-6 pr-1 flex flex-col justify-between gap-1">
+            ${buildPhotoImageAreaHtml(photo, proj, idx, 'h-[122mm]')}
+            <div class="flex items-center justify-between text-[9px] font-bold text-emerald-950">
+              <span>No.${idx + 1} ${escapeHtml(photo.location || '')}</span>
+              <span class="font-mono">${escapeHtml(photo.date || '')}</span>
+            </div>
+          </div>
+          <!-- 右頁：野帳方眼メモ ＋ 豆図 -->
+          <div class="col-span-6 pl-1.5 flex flex-col gap-1.5 text-[11px]">
+            <div class="border-b border-emerald-700/70 pb-1 flex items-center justify-between font-extrabold text-emerald-950">
+              <input type="text" value="${escapeHtml(photo.workType || '現場計測・野帳記録')}"
+                     oninput="updatePhotoField('${photo.id}', 'workType', this.value)"
+                     class="bg-transparent font-extrabold outline-none w-full" />
+            </div>
+            <textarea oninput="updatePhotoField('${photo.id}', 'comment', this.value)"
+                      placeholder="野帳方眼メモ・実測値・確認事項..."
+                      class="no-print-textarea w-full flex-1 bg-transparent text-xs leading-6 text-slate-900 outline-none resize-none">${escapeHtml(photo.comment || '')}</textarea>
+            <div class="print-only-memo hidden text-xs leading-6 text-slate-900">${escapeHtml(photo.comment || '')}</div>
+            ${photo.mamezuDataUrl ? `
+              <div onclick="openMamezuEditor('${photo.id}', 'mamezu')" class="border border-emerald-600/60 rounded bg-white/90 p-1 cursor-pointer">
+                <img src="${escapeHtml(photo.mamezuDataUrl)}" class="w-full h-24 object-contain" />
+              </div>
+            ` : ''}
+          </div>
+        </div>
+      `;
+    }
+
+    function renderLedgerPages() {
+      const container = document.getElementById('ledger-pages-container');
+      if (!container) return;
+
+      const proj = getCurrentProject();
+      const paperInfo = PAPER_FORMATS[proj.paperFormat] || PAPER_FORMATS['A4-portrait'];
+      const tpl = proj.templateType || '3rows';
+
+      const filtered = proj.photos.filter(p => {
+        if (sourceFilter === 'pin') return p.sourceType === 'pin';
+        if (sourceFilter === 'standalone') return p.sourceType !== 'pin';
+        return true;
+      });
+
+      const perPage = getItemsPerPage(proj.paperFormat, tpl);
+      const chunks = [];
+      for (let i = 0; i < filtered.length; i += perPage) {
+        chunks.push(filtered.slice(i, i + perPage));
+      }
+      if (chunks.length === 0) chunks.push([]);
+
+      const badge = document.getElementById('page-summary-badge');
+      if (badge) {
+        badge.textContent = `${paperInfo.label} / 全 ${chunks.length} 頁 / ${filtered.length} 枚`;
+      }
+
+      const bindCls = proj.bindingMargin === 'left'
+        ? 'bind-margin-left'
+        : (proj.bindingMargin === 'top' ? 'bind-margin-top' : '');
+
+      const isYaechoTpl = tpl.startsWith('yaecho');
+      const cropBanner = (isYaechoTpl && proj.yaechoCropMode !== 'off')
+        ? `<div class="text-[9px] font-mono text-center text-slate-500 border-b border-dashed border-slate-400 pb-0.5 mb-1">
+             ✂️ 野帳切り取りガイド（${proj.yaechoCropMode === 'shrink' ? '94%縮小: 170×155mm' : 'フルサイズ100%: 182×165mm'}）
+           </div>`
+        : '';
+
+      container.innerHTML = chunks.map((pageItems, pageIdx) => {
+        const showDocHeader = !isYaechoTpl && !tpl.startsWith('photo_only');
+        const docHeaderHtml = showDocHeader ? `
+          <div class="border-b-2 border-slate-800 pb-1.5 mb-2.5 flex flex-wrap items-end justify-between gap-2 shrink-0">
+            <div class="flex-1 min-w-[200px]">
+              <input type="text" value="${escapeHtml(proj.projectName)}"
+                     oninput="getCurrentProject().projectName=this.value; document.getElementById('header-project-name').textContent=this.value; persistState();"
+                     class="w-full text-base font-black text-slate-900 bg-transparent outline-none" />
+              <input type="text" value="${escapeHtml(proj.subtitle || '')}"
+                     oninput="getCurrentProject().subtitle=this.value; persistState();"
+                     class="w-full text-[11px] font-bold text-slate-600 bg-transparent outline-none" />
+            </div>
+            <div class="text-right text-[11px] font-bold text-slate-700 shrink-0">
+              <div>施工者: <input type="text" value="${escapeHtml(proj.contractor || '')}" oninput="getCurrentProject().contractor=this.value; persistState();" class="w-24 border-b border-slate-400 bg-transparent text-center outline-none" /></div>
+              <div class="font-mono text-[10px] text-slate-500 mt-0.5">Page ${pageIdx + 1} / ${chunks.length}</div>
+            </div>
+          </div>
+        ` : '';
+
+        let bodyHtml = '';
+        if (pageItems.length === 0) {
+          bodyHtml = `
+            <div class="flex-1 border-2 border-dashed border-slate-300 rounded-xl flex flex-col items-center justify-center text-slate-400 p-8 text-center">
+              <div class="text-3xl mb-2">📷</div>
+              <div class="font-bold text-sm">表示する写真がありません</div>
+              <div class="text-xs mt-1">上部の「📁 一括読込」または「＋ 自由写真枠」から追加してください</div>
+            </div>
+          `;
+        } else if (tpl === '3rows' || tpl === '4rows' || tpl === 'public_3step') {
+          bodyHtml = `<div class="flex-1 flex flex-col gap-2.5 min-h-0">${pageItems.map(p => buildStandardRowCardHtml(p, proj, proj.photos.indexOf(p), tpl === '4rows')).join('')}</div>`;
+        } else if (tpl === '6grid') {
+          bodyHtml = `<div class="flex-1 grid grid-cols-2 gap-2.5 min-h-0">${pageItems.map(p => buildGridCardHtml(p, proj, proj.photos.indexOf(p), false, 'h-36')).join('')}</div>`;
+        } else if (tpl === 'before_after') {
+          bodyHtml = `<div class="flex-1 grid grid-cols-2 gap-2.5 min-h-0">${pageItems.map(p => buildGridCardHtml(p, proj, proj.photos.indexOf(p), false, 'h-48')).join('')}</div>`;
+        } else if (tpl === '4grid' || tpl === '4grid_h') {
+          bodyHtml = `<div class="flex-1 grid grid-cols-2 gap-2.5 min-h-0">${pageItems.map(p => buildGridCardHtml(p, proj, proj.photos.indexOf(p), false, tpl === '4grid_h' ? 'h-32' : 'h-48')).join('')}</div>`;
+        } else if (tpl === '2grid_h') {
+          bodyHtml = `<div class="flex-1 flex flex-col gap-2.5 min-h-0">${pageItems.map(p => buildStandardRowCardHtml(p, proj, proj.photos.indexOf(p), true)).join('')}</div>`;
+        } else if (tpl === 'photo_only_2v') {
+          bodyHtml = `<div class="flex-1 flex flex-col gap-2.5 min-h-0">${pageItems.map(p => buildGridCardHtml(p, proj, proj.photos.indexOf(p), true, 'h-72')).join('')}</div>`;
+        } else if (tpl === 'photo_only_4') {
+          bodyHtml = `<div class="flex-1 grid grid-cols-2 gap-2.5 min-h-0">${pageItems.map(p => buildGridCardHtml(p, proj, proj.photos.indexOf(p), true, 'h-60')).join('')}</div>`;
+        } else if (tpl === 'photo_only_8') {
+          bodyHtml = `<div class="flex-1 grid grid-cols-2 sm:grid-cols-4 gap-2 min-h-0">${pageItems.map(p => buildGridCardHtml(p, proj, proj.photos.indexOf(p), true, 'h-40')).join('')}</div>`;
+        } else if (tpl === 'yaecho_single_card') {
+          bodyHtml = buildYaechoCardHtml(pageItems[0], proj, proj.photos.indexOf(pageItems[0]), 'single_card');
+        } else if (tpl === 'yaecho_single_photo_only') {
+          bodyHtml = buildYaechoCardHtml(pageItems[0], proj, proj.photos.indexOf(pageItems[0]), 'single_photo_only');
+        } else if (tpl === 'yaecho_spread' || tpl === 'yaecho_spread_x2') {
+          bodyHtml = `<div class="flex-1 flex flex-col gap-3 min-h-0">${pageItems.map(p => buildYaechoCardHtml(p, proj, proj.photos.indexOf(p), 'spread')).join('')}</div>`;
+        }
+
+        return `
+          <section class="${paperInfo.sheetClass} ${bindCls}">
+            ${cropBanner}
+            ${docHeaderHtml}
+            ${bodyHtml}
+          </section>
+        `;
+      }).join('');
+    }
+
+    function renderAll() {
+      const proj = getCurrentProject();
+      const hdrName = document.getElementById('header-project-name');
+      if (hdrName) hdrName.textContent = proj.projectName;
+
+      const paperSel = document.getElementById('paper-format-select');
+      if (paperSel) paperSel.value = proj.paperFormat || 'A4-portrait';
+
+      const tplSel = document.getElementById('tpl-select');
+      if (tplSel) tplSel.value = proj.templateType || '3rows';
+
+      const bindSel = document.getElementById('sel-binding-margin');
+      if (bindSel) bindSel.value = proj.bindingMargin || 'none';
+
+      const cropSel = document.getElementById('sel-yaecho-crop');
+      if (cropSel) cropSel.value = proj.yaechoCropMode || 'full';
+
+      const cbChk = document.getElementById('chk-mini-chalkboard');
+      if (cbChk) cbChk.checked = proj.showMiniChalkboard !== false;
+
+      const cbStyleSel = document.getElementById('sel-chalkboard-style');
+      if (cbStyleSel) cbStyleSel.value = proj.chalkboardStyle || 'green_classic';
+
+      updateAutoSaveUi();
+      updatePrintStyleRule(proj.paperFormat || 'A4-portrait');
+      renderLedgerPages();
+    }
+
+    // ==================== JSON共有・Discord送信・外部連携 ====================
+    function openDataModal() { openModal('modal-data'); }
+    function openDiscordModal() {
+      const inp = document.getElementById('ledger-webhook-input');
+      if (inp) inp.value = appState.discordWebhookUrl || '';
+      openModal('modal-discord');
+    }
+
+    function exportLedgerJson() {
+      const blob = new Blob([JSON.stringify(appState, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `construction_ledger_${Date.now()}.json`;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      closeModal('modal-data');
+      showToast('台帳プロジェクトをJSONファイルとして保存しました');
+    }
+
+    function importLedgerJson(event) {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = e => {
+        try {
+          const parsed = JSON.parse(e.target.result);
+          if (parsed && Array.isArray(parsed.projects) && parsed.projects.length > 0) {
+            appState = parsed;
+            persistState();
+            closeModal('modal-data');
+            renderAll();
+            showToast('台帳JSONファイルを読み込みました');
+          } else if (parsed && Array.isArray(parsed.photos)) {
+            appState.projects.push(parsed);
+            appState.currentProjectIndex = appState.projects.length - 1;
+            persistState();
+            closeModal('modal-data');
+            renderAll();
+            showToast('単一プロジェクトJSONを追加しました');
+          }
+        } catch (_) {
+          showToast('JSONファイルの形式が正しくありません');
+        }
+      };
+      reader.readAsText(file);
+      event.target.value = '';
+    }
+
+    function importSampleBlueprintPins() {
+      const samplePins = [
+        { numLabel: '①', typeLabel: '安全養生', comment: 'EV開口部手すり設置完了確認' },
+        { numLabel: '②', typeLabel: '設備配管', comment: '北側梁貫通スリーブ養生確認' }
+      ];
+      samplePins.forEach(pin => {
+        addPhotoItem({
+          sourceType: 'pin',
+          pinLabel: `📍 ピン${pin.numLabel} 連動`,
+          workType: pin.typeLabel,
+          comment: pin.comment,
+          silent: true
+        });
+      });
+      persistState();
+      renderAll();
+      showToast('図面メモの管理ピン2件を台帳へ取り込みました');
+    }
+
+    function saveWebhookOnly() {
+      appState.discordWebhookUrl = (document.getElementById('ledger-webhook-input')?.value || '').trim();
+      persistState();
+      closeModal('modal-discord');
+      showToast('Discord Webhook URLを端末へ保存しました');
+    }
+
+    async function sendLedgerToDiscord() {
+      const url = (document.getElementById('ledger-webhook-input')?.value || '').trim();
+      const msg = (document.getElementById('ledger-discord-msg')?.value || '').trim();
+      appState.discordWebhookUrl = url;
+      persistState();
+      closeModal('modal-discord');
+
+      if (!url) {
+        showToast('Webhook URL未設定のため、ローカル保存のみ完了しました');
+        return;
+      }
+
+      const proj = getCurrentProject();
+      const lines = proj.photos.map((p, i) => `${i + 1}. [${p.workType || '工種未設定'}] ${p.location || ''} : ${p.comment || ''}`).join('\n');
+      const content = `📷 **${proj.projectName}**\n${msg}\n\`\`\`\n${lines.slice(0, 1500)}\n\`\`\``;
+
+      try {
+        const fd = new FormData();
+        fd.append('payload_json', JSON.stringify({ content }));
+        fd.append('file0', new Blob([JSON.stringify(appState, null, 2)], { type: 'application/json' }), `ledger_${Date.now()}.json`);
+        const res = await fetch(url, { method: 'POST', body: fd });
+        showToast(res.ok ? '✅ Discordへ台帳サマリー＆JSONを送信しました' : '❌ Discord送信に失敗しました');
+      } catch (err) {
+        showToast(`❌ 通信エラー: ${err.message}`);
+      }
+    }
+
+    function sendLedgerToHostApp() {
+      const payload = { type: 'LEDGER_EXPORT_DATA', project: JSON.parse(JSON.stringify(getCurrentProject())) };
+      if (window.parent && window.parent !== window) window.parent.postMessage(payload, '*');
+      if (window.opener) window.opener.postMessage(payload, '*');
+      showToast('図面メモ本体へ台帳データを送信しました');
+    }
+
+    window.addEventListener('message', event => {
+      const msg = event.data;
+      if (!msg || typeof msg !== 'object') return;
+      if (msg.type === 'LEDGER_IMPORT_PINS' && Array.isArray(msg.pins)) {
+        msg.pins.forEach(pin => {
+          addPhotoItem({
+            sourceType: 'pin',
+            pinLabel: `📍 ピン${pin.numLabel || ''} 連動`,
+            workType: pin.typeLabel || '',
+            comment: pin.comment || '',
+            silent: true
+          });
+        });
+        persistState();
+        renderAll();
+        showToast('図面メモのピン一覧を写真台帳へ取り込みました');
+      }
+    });
+
+    // ==================== 初期化 ====================
+    document.addEventListener('DOMContentLoaded', async () => {
+      loadCloudSyncConfig();
+      initMamezuCanvasEvents();
+
+      try {
+        const metaRaw = localStorage.getItem(STORAGE_KEY_LEDGER);
+        if (metaRaw) {
+          const meta = JSON.parse(metaRaw);
+          if (typeof meta.autoSave === 'boolean') appState.autoSave = meta.autoSave;
+          if (typeof meta.discordWebhookUrl === 'string') appState.discordWebhookUrl = meta.discordWebhookUrl;
+        }
+      } catch (_) {}
+
+      const saved = await LedgerDB.load();
+      if (saved && Array.isArray(saved.projects) && saved.projects.length > 0) {
+        appState.projects = saved.projects;
+        appState.currentProjectIndex = Math.min(saved.currentProjectIndex || 0, saved.projects.length - 1);
+      }
+
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('embed') === '1') {
+        const btn = document.getElementById('btn-embed-return');
+        if (btn) {
+          btn.classList.remove('hidden');
+          btn.classList.add('flex');
+        }
+      }
+
+      renderAll();
+    });
+  </script>
+</body>
+</html>
