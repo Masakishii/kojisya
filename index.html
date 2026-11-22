@@ -309,10 +309,15 @@
         </button>
       </div>
 
-      <!-- 右：クラウド同期・カメラ撮影・一括読込・Discord PDF送信・PDF保存/印刷 -->
+      <!-- 右：スマホ/PC切替・クラウド同期・カメラ撮影・一括読込・Discord PDF送信・PDF保存/印刷 -->
       <div class="flex flex-wrap items-center gap-1.5 text-xs font-bold">
         <button id="btn-embed-return" onclick="sendLedgerToHostApp()" class="hidden bg-teal-600 hover:bg-teal-500 active:scale-95 text-white px-2.5 py-1.5 rounded-lg items-center gap-1 shadow cursor-pointer whitespace-nowrap">
           <span>📌</span><span>図面本体へ送信</span>
+        </button>
+
+        <button id="btn-toggle-ui-mode" onclick="toggleGuiMode()" class="bg-emerald-700 hover:bg-emerald-600 active:scale-95 text-white px-2.5 py-1.5 rounded-lg flex items-center gap-1 shadow border border-emerald-400/70 cursor-pointer whitespace-nowrap" title="スマホ専用GUIとPCフル機能GUIをワンタップで切り替えます">
+          <span id="ui-mode-icon">📱</span>
+          <span id="ui-mode-label">スマホUI</span>
         </button>
 
         <button id="btn-cloud-sync-header" onclick="openCloudSyncModal()" class="bg-cyan-700 hover:bg-cyan-600 active:scale-95 text-white px-2.5 py-1.5 rounded-lg flex items-center gap-1 shadow border border-cyan-500/60 cursor-pointer whitespace-nowrap" title="同期サーバーと現場キーで接続・サーバー不要写真削除・野帳と共有">
@@ -320,7 +325,6 @@
           <span id="cloud-sync-header-label">クラウド未設定</span>
         </button>
 
-        <!-- スマホ・タブレットのカメラ直接撮影ボタン -->
         <label class="relative overflow-hidden bg-teal-600 hover:bg-teal-500 active:scale-95 text-white px-2.5 py-1.5 rounded-lg flex items-center gap-1 shadow cursor-pointer whitespace-nowrap" title="スマホ・タブレットのカメラを起動して撮影し、そのまま台帳の写真材料として追加します">
           <span>📸 カメラ撮影</span>
           <input type="file" accept="image/*" capture="environment" onchange="handleCameraCaptureUpload(event)" class="absolute inset-0 opacity-0 cursor-pointer" />
@@ -354,8 +358,8 @@
     </div>
   </header>
 
-  <!-- ==================== 2. 台帳レイアウト・用紙サイズ・構成プルダウン・電子黒板バー ==================== -->
-  <div class="no-print bg-slate-800 border-b border-slate-700 px-3 py-2 text-xs text-slate-200">
+  <!-- ==================== 2. 台帳レイアウト・用紙サイズ・構成プルダウン・電子黒板バー（PCフル版） ==================== -->
+  <div id="pc-sub-toolbar" class="no-print bg-slate-800 border-b border-slate-700 px-3 py-2 text-xs text-slate-200">
     <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
       <!-- 用紙サイズ ＆ 構成テンプレート -->
       <div class="flex flex-wrap items-center gap-2">
@@ -444,10 +448,123 @@
     </div>
   </div>
 
-  <!-- ==================== 3. 中央A4/A3工事写真台帳プレビュー＆直接編集エリア ==================== -->
+  <!-- ==================== 3. 中央A4/A3工事写真台帳プレビュー＆直接編集エリア（PCフル版） ==================== -->
   <main id="ledger-scroll-area" class="flex-1 overflow-auto p-3 sm:p-6">
     <div id="ledger-pages-container" class="max-w-5xl mx-auto"></div>
   </main>
+
+  <!-- ==================== 3-B. スマホ専用GUI（片手操作・撮影・黒板載せ・一時保管・PDF保管） ==================== -->
+  <section id="mobile-gui-container" class="no-print hidden flex-1 flex-col bg-slate-950 text-slate-100 pb-24">
+    <div class="px-3 py-2 bg-slate-900 border-b border-slate-800 flex items-center justify-between gap-2 sticky top-[52px] z-30">
+      <div class="text-xs font-extrabold text-amber-300 truncate" id="mob-gui-summary">📱 スマホ現場モード（全 3 枚）</div>
+      <div class="flex items-center gap-1.5 shrink-0">
+        <button onclick="openChalkboardEditor(null)" class="px-2.5 py-1 bg-emerald-800 hover:bg-emerald-700 border border-emerald-600 rounded-lg text-[11px] font-bold text-white cursor-pointer">
+          🟩 黒板設定
+        </button>
+        <button onclick="setGuiMode('pc')" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg text-[11px] font-bold text-sky-300 cursor-pointer">
+          💻 PCフル版へ
+        </button>
+      </div>
+    </div>
+
+    <div id="mobile-photo-cards-list" class="p-3 space-y-3 max-w-xl mx-auto w-full"></div>
+
+    <!-- スマホ下部固定アクションバー -->
+    <div class="fixed bottom-0 inset-x-0 z-40 bg-slate-900/95 backdrop-blur border-t border-slate-700 px-2 py-2 shadow-2xl">
+      <div class="max-w-xl mx-auto grid grid-cols-4 gap-1.5 text-[11px] font-extrabold">
+        <label class="relative overflow-hidden py-2.5 bg-teal-600 hover:bg-teal-500 active:scale-95 text-white rounded-xl flex flex-col items-center justify-center gap-0.5 shadow cursor-pointer">
+          <span class="text-base leading-none">📸</span>
+          <span>撮影追加</span>
+          <input type="file" accept="image/*" capture="environment" onchange="handleMobileQuickCameraCapture(event)" class="absolute inset-0 opacity-0 cursor-pointer" />
+        </label>
+        <label class="relative overflow-hidden py-2.5 bg-sky-600 hover:bg-sky-500 active:scale-95 text-white rounded-xl flex flex-col items-center justify-center gap-0.5 shadow cursor-pointer">
+          <span class="text-base leading-none">🖼️</span>
+          <span>アルバム</span>
+          <input type="file" accept="image/*" multiple onchange="handleBatchImageUpload(event)" class="absolute inset-0 opacity-0 cursor-pointer" />
+        </label>
+        <button onclick="saveTempDraftSnapshot()" class="py-2.5 bg-amber-600 hover:bg-amber-500 active:scale-95 text-white rounded-xl flex flex-col items-center justify-center gap-0.5 shadow cursor-pointer">
+          <span class="text-base leading-none">⏸️</span>
+          <span>一時保管</span>
+        </button>
+        <button onclick="downloadDirectLedgerPdf()" class="py-2.5 bg-rose-600 hover:bg-rose-500 active:scale-95 text-white rounded-xl flex flex-col items-center justify-center gap-0.5 shadow cursor-pointer">
+          <span class="text-base leading-none">📄</span>
+          <span>PDF保管</span>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== モーダルM-CB：スマホ用「用意した写真黒板を載せる」ボトムシート ==================== -->
+  <div id="modal-mobile-chalkboard-picker" class="no-print hidden fixed inset-0 bg-black/80 backdrop-blur-xs z-50 items-end sm:items-center justify-center p-0 sm:p-4">
+    <div class="bg-slate-900 border-t sm:border border-emerald-600/70 text-white rounded-t-2xl sm:rounded-2xl w-full max-w-lg max-h-[88vh] flex flex-col overflow-hidden shadow-2xl text-xs">
+      <div class="px-4 py-3 bg-emerald-950 border-b border-emerald-800 flex items-center justify-between shrink-0">
+        <h3 id="mob-cb-picker-title" class="font-extrabold text-sm">🟩 用意した写真黒板を載せる</h3>
+        <button onclick="closeModal('modal-mobile-chalkboard-picker')" class="text-slate-300 hover:text-white text-lg px-2 cursor-pointer">✕</button>
+      </div>
+      <div class="p-3 overflow-y-auto space-y-3 flex-1">
+        <div>
+          <div class="text-[11px] font-extrabold text-amber-300 mb-1.5">1. 用意した標準黒板（タップで即載せ替え）</div>
+          <div id="mob-cb-presets-grid" class="grid grid-cols-2 gap-2"></div>
+        </div>
+        <div class="pt-2 border-t border-slate-800">
+          <div class="flex items-center justify-between mb-1.5">
+            <span class="text-[11px] font-extrabold text-cyan-300">2. ⭐ マイ黒板（現在の黒板を登録して使い回し）</span>
+            <button onclick="registerCurrentPhotoAsMyChalkboard()" class="px-2.5 py-1 bg-cyan-700 hover:bg-cyan-600 rounded-lg text-[10px] font-extrabold text-white cursor-pointer">
+              ＋ この写真の黒板を登録
+            </button>
+          </div>
+          <div id="mob-cb-my-list" class="grid grid-cols-2 gap-2"></div>
+        </div>
+        <div class="pt-2 border-t border-slate-800 flex gap-2">
+          <button onclick="closeModal('modal-mobile-chalkboard-picker'); openChalkboardEditor(mobileCbTargetPhotoId);" class="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-xl font-bold cursor-pointer">
+            ✏️ 文字・色・罫線を細かく編集
+          </button>
+          <button onclick="toggleSinglePhotoChalkboardHide()" class="px-3 py-2.5 bg-rose-950 hover:bg-rose-800 border border-rose-700 text-rose-200 rounded-xl font-bold cursor-pointer">
+            黒板ON/OFF
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== モーダルA：📂 現場・台帳プロジェクト切替 ＆ 新規作成モーダル ==================== -->
+  <div id="modal-projects" class="no-print hidden fixed inset-0 bg-black/80 backdrop-blur-xs z-50 items-center justify-center p-3">
+    <div class="bg-slate-900 border border-amber-600/70 text-white rounded-2xl w-full max-w-lg max-h-[88vh] flex flex-col overflow-hidden shadow-2xl text-xs">
+      <div class="px-4 py-3 bg-slate-950 border-b border-slate-800 flex items-center justify-between shrink-0">
+        <h2 class="font-extrabold text-sm flex items-center gap-1.5">
+          <span>📂</span> 工事写真台帳プロジェクト切替・新規作成
+        </h2>
+        <button onclick="closeModal('modal-projects')" class="text-slate-400 hover:text-white text-lg px-2 cursor-pointer">✕</button>
+      </div>
+      <div class="p-3 bg-slate-950 border-b border-slate-800 flex gap-2 shrink-0">
+        <input id="new-project-name-input" type="text" placeholder="新規工事台帳名（例：△△ビル改修工事 写真台帳）"
+               class="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white outline-none focus:border-amber-400" />
+        <button onclick="createNewProjectFromModal()" class="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white font-extrabold rounded-xl shadow cursor-pointer whitespace-nowrap">
+          ＋ 新規作成
+        </button>
+      </div>
+      <div id="project-list-body" class="p-3 overflow-y-auto space-y-2 flex-1"></div>
+    </div>
+  </div>
+
+  <!-- ==================== モーダルB：📦 データ保存・JSON読込モーダル ==================== -->
+  <div id="modal-data" class="no-print hidden fixed inset-0 bg-black/80 backdrop-blur-xs z-50 items-center justify-center p-3">
+    <div class="bg-slate-900 border border-slate-700 text-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl text-xs">
+      <div class="px-4 py-3 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
+        <h2 class="font-extrabold text-sm flex items-center gap-1.5"><span>📦</span> 台帳データ（JSON）保存・復元</h2>
+        <button onclick="closeModal('modal-data')" class="text-slate-400 hover:text-white text-lg px-2 cursor-pointer">✕</button>
+      </div>
+      <div class="p-4 space-y-3">
+        <button onclick="downloadLedgerJson()" class="w-full py-3 bg-sky-600 hover:bg-sky-500 text-white font-extrabold rounded-xl shadow cursor-pointer">
+          ↓ 現在の台帳データをJSONファイルで保存
+        </button>
+        <label class="relative overflow-hidden block w-full py-3 bg-slate-800 hover:bg-slate-700 border border-slate-600 text-center font-extrabold rounded-xl cursor-pointer">
+          <span>↑ 保存済み台帳JSONファイルを読み込む</span>
+          <input type="file" accept=".json,application/json" onchange="importLedgerJsonFile(event)" class="absolute inset-0 opacity-0 cursor-pointer" />
+        </label>
+      </div>
+    </div>
+  </div>
 
   <!-- ==================== モーダルD：⏸️ 一時保存（端末保管 ＋ Discord PDF/JSON自動送信） ==================== -->
   <div id="modal-temp-drafts" class="no-print hidden fixed inset-0 bg-black/80 backdrop-blur-xs z-50 items-center justify-center p-3">
@@ -551,78 +668,27 @@
           </div>
         </div>
 
-        <div class="p-3 rounded-xl bg-emerald-950/40 border border-emerald-700/70 space-y-2">
-          <div class="font-extrabold text-emerald-300">3. 工事写真台帳のクラウド同期（DB ＋ ストレージ）</div>
+        <div class="p-3 rounded-xl bg-slate-800/80 border border-slate-700 space-y-2">
+          <div class="font-extrabold text-emerald-300">3. クラウド同期（台帳データの送受信）</div>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <button type="button" onclick="pushLedgerToCloud()" id="btn-cloud-push" class="py-2.5 px-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-extrabold shadow flex items-center justify-center gap-1.5 cursor-pointer">
-              <span>⬆️</span><span>現在の台帳をクラウドへ保存 (Push)</span>
+            <button id="btn-cloud-push" type="button" onclick="pushLedgerToCloud()" class="py-2.5 px-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-extrabold shadow cursor-pointer">
+              ⬆️ 現在の台帳をクラウドへ保存 (Push)
             </button>
-            <button type="button" onclick="pullLedgerFromCloud()" id="btn-cloud-pull" class="py-2.5 px-3 bg-sky-600 hover:bg-sky-500 text-white rounded-xl font-extrabold shadow flex items-center justify-center gap-1.5 cursor-pointer">
-              <span>⬇️</span><span>クラウドから台帳を読込 (Pull)</span>
+            <button id="btn-cloud-pull" type="button" onclick="pullLedgerFromCloud()" class="py-2.5 px-3 bg-sky-600 hover:bg-sky-500 text-white rounded-xl font-extrabold shadow cursor-pointer">
+              ⬇️ クラウドから台帳を読込 (Pull)
             </button>
           </div>
         </div>
 
         <div class="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
-          <div class="flex flex-wrap items-center justify-between gap-1.5">
-            <span class="font-extrabold text-amber-300">4. 🖼️ サーバー上の共通写真・豆図プール（不要データの削除対応）</span>
-            <div class="flex items-center gap-1">
-              <button type="button" onclick="deleteAllUnusedCloudMedia()" class="px-2 py-1 bg-rose-900 hover:bg-rose-700 border border-rose-700 rounded-lg text-[10px] font-extrabold text-rose-100 cursor-pointer" title="現在の台帳で使われていないサーバー上の不要な写真・豆図を一括削除します">
-                🧹 未使用を一括削除
-              </button>
-              <button type="button" onclick="refreshCloudSharedMediaPool()" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-[10px] font-bold text-cyan-300 cursor-pointer">
-                🔄 更新
-              </button>
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <span class="font-extrabold text-cyan-300">4. サーバー上の共通写真・豆図プール（野帳と共有 ＆ 不要データ削除）</span>
+            <div class="flex items-center gap-1.5">
+              <button type="button" onclick="refreshCloudSharedMediaPool()" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 rounded text-[10px] font-bold cursor-pointer">🔄 再読込</button>
+              <button id="btn-delete-all-unused-cloud" type="button" onclick="deleteAllUnusedCloudMedia()" class="px-2 py-1 bg-rose-900 hover:bg-rose-700 text-white rounded text-[10px] font-bold cursor-pointer">🧹 未使用を一括削除</button>
             </div>
           </div>
-          <div id="cloud-shared-media-grid" class="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-56 overflow-y-auto p-1">
-            <div class="col-span-full text-center text-slate-400 py-4">同期サーバーURLと現場キーを保存すると、サーバー上の写真・豆図一覧（使用中/未使用判定＆削除可）が表示されます</div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ==================== モーダル1：台帳プロジェクト切替・新規作成 ==================== -->
-  <div id="modal-projects" class="no-print hidden fixed inset-0 bg-black/75 backdrop-blur-xs z-50 items-center justify-center p-3">
-    <div class="bg-slate-900 border border-slate-700 text-white rounded-2xl w-full max-w-lg max-h-[86vh] flex flex-col overflow-hidden shadow-2xl">
-      <div class="px-4 py-3 bg-slate-800 border-b border-slate-700 flex items-center justify-between">
-        <h2 class="font-bold text-sm flex items-center gap-1.5"><span>📁</span> 工事写真台帳プロジェクト切替</h2>
-        <button onclick="closeModal('modal-projects')" class="text-slate-400 hover:text-white text-lg px-2 cursor-pointer">✕</button>
-      </div>
-      <div class="p-3 bg-slate-950 border-b border-slate-800 flex gap-2 text-xs">
-        <input id="new-project-name-input" type="text" placeholder="新規工事名（例：第2工区 基礎配筋写真帳）"
-               class="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white outline-none focus:border-amber-400" />
-        <button onclick="createNewProjectFromModal()" class="bg-amber-600 hover:bg-amber-500 text-white font-extrabold px-4 py-2 rounded-xl cursor-pointer whitespace-nowrap">
-          ＋ 新規作成
-        </button>
-      </div>
-      <div id="project-list-body" class="p-3 overflow-y-auto space-y-2 flex-1 text-xs"></div>
-    </div>
-  </div>
-
-  <!-- ==================== モーダル2：共有JSON保存・読込・サンプルピン取込 ==================== -->
-  <div id="modal-data" class="no-print hidden fixed inset-0 bg-black/75 backdrop-blur-xs z-50 items-center justify-center p-3">
-    <div class="bg-slate-900 border border-slate-700 text-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl text-xs">
-      <div class="px-4 py-3 bg-slate-800 border-b border-slate-700 flex items-center justify-between">
-        <h2 class="font-bold text-sm">💾 台帳データの共有保存・読込・連携</h2>
-        <button onclick="closeModal('modal-data')" class="text-slate-400 hover:text-white text-lg px-2 cursor-pointer">✕</button>
-      </div>
-      <div class="p-4 space-y-2.5">
-        <button onclick="exportLedgerJson()" class="w-full py-2.5 px-3 bg-sky-600 hover:bg-sky-500 text-white rounded-xl font-bold flex items-center justify-between cursor-pointer">
-          <span>📦 台帳プロジェクトをJSON保存（他端末へ引継）</span>
-          <span>↓</span>
-        </button>
-        <label class="w-full py-2.5 px-3 bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white rounded-xl font-bold flex items-center justify-between cursor-pointer">
-          <span>📂 JSONファイルから台帳を読み込む</span>
-          <span>↑</span>
-          <input type="file" accept=".json,application/json" onchange="importLedgerJson(event)" class="hidden" />
-        </label>
-        <div class="pt-2 border-t border-slate-800 space-y-1.5">
-          <div class="text-[11px] text-slate-400 font-bold">図面メモ本体との連携テスト・サンプル</div>
-          <button onclick="importSampleBlueprintPins(); closeModal('modal-data');" class="w-full py-2 px-3 bg-indigo-900/80 hover:bg-indigo-800 border border-indigo-600 text-indigo-100 rounded-xl font-bold text-left cursor-pointer">
-            📍 図面メモの管理ピン一覧を台帳へ取り込む（デモ）
-          </button>
+          <div id="cloud-shared-media-grid" class="grid grid-cols-2 sm:grid-cols-4 gap-2 max-h-56 overflow-y-auto"></div>
         </div>
       </div>
     </div>
@@ -792,6 +858,15 @@
       </div>
 
       <div class="px-3 py-1.5 bg-slate-900 border-b border-slate-800 flex flex-wrap items-center gap-2 text-[11px] shrink-0">
+        <div class="inline-flex items-center gap-1 bg-slate-950 border border-amber-600/70 rounded px-1.5 py-0.5">
+          <span class="text-amber-300 font-bold">📐 角度:</span>
+          <select id="mz-angle-snap-select" onchange="mzState.angleSnap=this.value;" class="bg-transparent font-extrabold text-amber-200 outline-none cursor-pointer">
+            <option value="off">自由 (OFF)</option>
+            <option value="90">90° (水平/垂直)</option>
+            <option value="15">15°単位</option>
+          </select>
+        </div>
+
         <div class="inline-flex items-center gap-1">
           <span class="text-slate-400 font-bold">線種:</span>
           <select id="mz-line-style-select" onchange="setMamezuLineStyle(this.value)" class="bg-slate-950 border border-slate-700 rounded px-2 py-0.5 font-bold text-sky-200 outline-none cursor-pointer">
@@ -1181,6 +1256,11 @@
       openModal('modal-cloud-sync');
       if (cloudSyncConfig.activeUrl && cloudSyncConfig.activeSiteKey) {
         refreshCloudSharedMediaPool();
+      } else {
+        const grid = document.getElementById('cloud-shared-media-grid');
+        if (grid) {
+          grid.innerHTML = `<div class="col-span-full text-center text-slate-400 py-4">同期サーバーURLと現場キーを保存すると、サーバー上の写真・豆図一覧が表示されます</div>`;
+        }
       }
     }
 
@@ -1537,6 +1617,8 @@
     }
 
     let cachedCloudMediaList = [];
+    let pendingSingleCloudDelId = '';
+    let pendingBulkUnusedDelArmed = false;
 
     function getUsedCloudMediaIdsSet() {
       const used = new Set();
@@ -1590,7 +1672,13 @@
     }
 
     async function deleteSingleCloudMedia(mediaId) {
-      if (!confirm('サーバー（R2ストレージ・DB）からこの画像・豆図を完全に削除しますか？')) return;
+      if (pendingSingleCloudDelId !== mediaId) {
+        pendingSingleCloudDelId = mediaId;
+        showToast('⚠️ もう一度「🗑️」を押すとサーバー（R2/DB）から完全削除します');
+        setTimeout(() => { if (pendingSingleCloudDelId === mediaId) pendingSingleCloudDelId = ''; }, 3500);
+        return;
+      }
+      pendingSingleCloudDelId = '';
       await deleteCloudMediaIds([mediaId]);
     }
 
@@ -1605,7 +1693,21 @@
         showToast('未使用のサーバー画像はありません（すべて台帳で使用中です）');
         return;
       }
-      if (!confirm(`現在の台帳で使われていないサーバー上の写真・豆図 ${unusedIds.length} 件を一括削除しますか？`)) return;
+      if (!pendingBulkUnusedDelArmed) {
+        pendingBulkUnusedDelArmed = true;
+        const btn = document.getElementById('btn-delete-all-unused-cloud');
+        if (btn) btn.textContent = `⚠️ 本当に ${unusedIds.length}件 削除する`;
+        showToast(`⚠️ 未使用の ${unusedIds.length} 件を削除するにはもう一度ボタンを押してください`);
+        setTimeout(() => {
+          pendingBulkUnusedDelArmed = false;
+          const b = document.getElementById('btn-delete-all-unused-cloud');
+          if (b) b.textContent = '🧹 未使用を一括削除';
+        }, 4000);
+        return;
+      }
+      pendingBulkUnusedDelArmed = false;
+      const btn = document.getElementById('btn-delete-all-unused-cloud');
+      if (btn) btn.textContent = '🧹 未使用を一括削除';
       await deleteCloudMediaIds(unusedIds);
     }
 
@@ -1645,7 +1747,7 @@
                 </span>
                 <button type="button" onclick="deleteSingleCloudMedia('${escapeHtml(m.media_id)}')"
                         class="absolute top-1 right-1 px-1.5 py-0.5 bg-rose-900/90 hover:bg-rose-600 text-white rounded text-[9px] font-bold cursor-pointer"
-                        title="サーバーからこの画像を削除">
+                        title="サーバーからこの画像を削除（2回押しで確認）">
                   🗑️
                 </button>
               </div>
@@ -1925,6 +2027,193 @@
         });
       }
     };
+
+    // ==================== Discord 送信 ＆ オフライン送信待機キュー ====================
+    async function updateLedgerOutboxBadge() {
+      const badge = document.getElementById('ledger-outbox-badge');
+      if (!badge) return;
+      const list = await LedgerDB.getAllRecords('outbox');
+      if (list.length > 0) {
+        badge.textContent = `⏳ 送信待機 ${list.length}`;
+        badge.classList.remove('hidden');
+      } else {
+        badge.classList.add('hidden');
+      }
+    }
+
+    async function postSingleOutboxRecordToDiscord(rec) {
+      const fd = new FormData();
+      fd.append('payload_json', JSON.stringify({ content: rec.content || '工事写真台帳データ' }));
+      let fileIdx = 0;
+      if (rec.pdfBlob) {
+        fd.append(`files[${fileIdx}]`, rec.pdfBlob, rec.pdfFileName || `ledger_${Date.now()}.pdf`);
+        fileIdx++;
+      }
+      if (rec.jsonText) {
+        fd.append(`files[${fileIdx}]`, new Blob([rec.jsonText], { type: 'application/json' }), rec.jsonFileName || `ledger_${Date.now()}.json`);
+        fileIdx++;
+      }
+      const res = await fetch(rec.webhookUrl, { method: 'POST', body: fd });
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+      return true;
+    }
+
+    async function enqueueOrSendLedgerDiscordRecord(rec, okMsg, queuedMsg) {
+      if (!navigator.onLine) {
+        await LedgerDB.putRecord('outbox', rec);
+        await updateLedgerOutboxBadge();
+        showToast(queuedMsg);
+        return false;
+      }
+      try {
+        await postSingleOutboxRecordToDiscord(rec);
+        showToast(okMsg);
+        return true;
+      } catch (_) {
+        await LedgerDB.putRecord('outbox', rec);
+        await updateLedgerOutboxBadge();
+        showToast(queuedMsg);
+        return false;
+      }
+    }
+
+    async function flushLedgerOutboxQueue(silentIfEmpty = true) {
+      const list = await LedgerDB.getAllRecords('outbox');
+      if (list.length === 0) {
+        await updateLedgerOutboxBadge();
+        if (!silentIfEmpty) showToast('送信待機中のデータはありません');
+        return;
+      }
+      if (!navigator.onLine) {
+        if (!silentIfEmpty) showToast('現在オフラインです。通信回復時に自動送信します');
+        return;
+      }
+      list.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+      let sentCount = 0;
+      for (const rec of list) {
+        try {
+          await postSingleOutboxRecordToDiscord(rec);
+          await LedgerDB.deleteRecord('outbox', rec.id);
+          sentCount++;
+        } catch (_) {
+          break;
+        }
+      }
+      await updateLedgerOutboxBadge();
+      if (sentCount > 0) {
+        showToast(`✅ 送信待機キューの ${sentCount} 件をDiscordへ自動送信しました！`);
+      }
+    }
+
+    function openDiscordModal() {
+      const inp = document.getElementById('ledger-webhook-input');
+      if (inp) inp.value = appState.discordWebhookUrl || '';
+      openModal('modal-discord');
+    }
+
+    function saveWebhookOnly() {
+      const url = (document.getElementById('ledger-webhook-input')?.value || '').trim();
+      appState.discordWebhookUrl = url;
+      persistState(true);
+      closeModal('modal-discord');
+      showToast(url ? '⚙️ Discord Webhook URLを端末内に保存しました' : 'Webhook URLをクリアしました');
+    }
+
+    async function sendLedgerToDiscord() {
+      const url = (document.getElementById('ledger-webhook-input')?.value || '').trim();
+      const msg = (document.getElementById('ledger-discord-msg')?.value || '').trim() || '工事写真台帳を共有します。';
+      const attachPdf = document.getElementById('chk-discord-attach-pdf')?.checked !== false;
+      const attachJson = document.getElementById('chk-discord-attach-json')?.checked !== false;
+
+      if (!url) {
+        showToast('Discord Webhook URLを入力してください');
+        return;
+      }
+
+      appState.discordWebhookUrl = url;
+      await persistState(true);
+
+      const btn = document.getElementById('btn-execute-discord-pdf-send');
+      if (btn) btn.disabled = true;
+      showToast('📄 台帳PDFとJSONを生成してDiscordへ送信しています...');
+
+      try {
+        const proj = getCurrentProject();
+        const now = Date.now();
+        const ts = new Date(now).toISOString().replace(/[-:T]/g, '').slice(0, 14);
+        const safeName = String(proj.projectName || 'construction_ledger').replace(/[\\/:*?"<>|\s]+/g, '_').slice(0, 28);
+        const pdfBlob = attachPdf ? await generateLedgerPdfBlobForDiscordOrDownload(9.2 * 1024 * 1024) : null;
+
+        closeModal('modal-discord');
+        await enqueueOrSendLedgerDiscordRecord(
+          {
+            id: `outbox_manual_${now}_${Math.random().toString(36).slice(2, 5)}`,
+            webhookUrl: url,
+            content: `📷 **${proj.projectName}**（全 ${proj.photos.length} 枚）\n${msg}`,
+            pdfBlob,
+            pdfFileName: attachPdf ? `${safeName}_${ts}.pdf` : '',
+            jsonText: attachJson ? JSON.stringify(proj, null, 2) : '',
+            jsonFileName: attachJson ? `${safeName}_${ts}.json` : '',
+            createdAt: now
+          },
+          '✅ Discordへ台帳PDF＋JSONを送信しました！',
+          '⏳ 圏外のため送信待機キューに一時保存しました（通信回復時に自動送信します）'
+        );
+      } catch (err) {
+        showToast(`❌ 送信準備エラー: ${err.message}`);
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    }
+
+    // ==================== JSON保存・読込モーダル ====================
+    function openDataModal() {
+      openModal('modal-data');
+    }
+
+    function downloadLedgerJson() {
+      const proj = getCurrentProject();
+      const safeName = String(proj.projectName || 'construction_ledger').replace(/[\\/:*?"<>|\s]+/g, '_').slice(0, 28);
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([JSON.stringify(proj, null, 2)], { type: 'application/json' }));
+      a.download = `${safeName}_${Date.now()}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      closeModal('modal-data');
+      showToast('📦 台帳JSONファイルを保存しました');
+    }
+
+    function importLedgerJsonFile(event) {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = e => {
+        try {
+          const parsed = JSON.parse(e.target.result);
+          if (parsed && Array.isArray(parsed.projects) && parsed.projects.length > 0) {
+            appState.projects = parsed.projects;
+            appState.currentProjectIndex = 0;
+          } else if (parsed && Array.isArray(parsed.photos)) {
+            parsed.id = 'proj_' + Date.now();
+            appState.projects.push(parsed);
+            appState.currentProjectIndex = appState.projects.length - 1;
+          } else {
+            throw new Error('不正なJSON形式です');
+          }
+          persistState(true);
+          closeModal('modal-data');
+          renderAll();
+          showToast('✅ 保存済み台帳JSONを読み込みました');
+        } catch (err) {
+          showToast(`❌ JSON読込エラー: ${err.message}`);
+        }
+      };
+      reader.readAsText(file);
+      event.target.value = '';
+    }
 
     // ==================== 30日削除保管庫（台帳もと削除後の30日保持・自動消去・削除時Discord送信） ====================
     async function purgeExpiredDeletedArchive() {
@@ -3057,7 +3346,10 @@
     }
 
     // ==================== プロジェクト切替モーダル ====================
+    let pendingDeleteProjectIdx = -1;
+
     function openProjectModal() {
+      pendingDeleteProjectIdx = -1;
       renderProjectList();
       openModal('modal-projects');
     }
@@ -3067,6 +3359,7 @@
       if (!body) return;
       body.innerHTML = appState.projects.map((pr, idx) => {
         const active = idx === appState.currentProjectIndex;
+        const isArmed = pendingDeleteProjectIdx === idx;
         return `
           <div class="p-2.5 rounded-xl border ${active ? 'border-amber-500 bg-amber-950/35' : 'border-slate-700 bg-slate-800'} flex items-center justify-between gap-2">
             <div onclick="switchProject(${idx})" class="flex-1 min-w-0 cursor-pointer">
@@ -3075,7 +3368,7 @@
             </div>
             <div class="flex items-center gap-1 shrink-0">
               ${active ? '<span class="px-2 py-0.5 bg-amber-600 rounded-full text-[10px] font-bold">選択中</span>' : ''}
-              ${appState.projects.length > 1 ? `<button onclick="deleteProject(${idx})" class="px-2 py-1 bg-rose-950 hover:bg-rose-700 text-rose-200 rounded-lg font-bold cursor-pointer">削除</button>` : ''}
+              ${appState.projects.length > 1 ? `<button onclick="deleteProject(${idx})" class="px-2 py-1 ${isArmed ? 'bg-rose-600 text-white' : 'bg-rose-950 hover:bg-rose-700 text-rose-200'} rounded-lg font-bold cursor-pointer">${isArmed ? '⚠️ 本当に削除' : '削除'}</button>` : ''}
             </div>
           </div>
         `;
@@ -3104,7 +3397,20 @@
 
     async function deleteProject(idx) {
       if (appState.projects.length <= 1) return;
-      if (!confirm('この台帳プロジェクトを削除しますか？（30日間削除保管庫に保持され、Discord設定時は通知されます）')) return;
+      if (pendingDeleteProjectIdx !== idx) {
+        pendingDeleteProjectIdx = idx;
+        renderProjectList();
+        showToast('⚠️ もう一度「本当に削除」を押すと30日保管庫へ移動します');
+        setTimeout(() => {
+          if (pendingDeleteProjectIdx === idx) {
+            pendingDeleteProjectIdx = -1;
+            renderProjectList();
+          }
+        }, 3500);
+        return;
+      }
+      pendingDeleteProjectIdx = -1;
+
       const targetProj = JSON.parse(JSON.stringify(appState.projects[idx]));
       const now = Date.now();
       await LedgerDB.putRecord('deleted_archive', {
@@ -3344,7 +3650,7 @@
         target.originalImageDataUrl = dataUrl;
         target.photoEditState = null;
         persistState();
-        renderLedgerPages();
+        renderAll();
         showToast('写真を差し替えました');
       } catch (_) {
         showToast('画像の読み込みに失敗しました');
@@ -3357,7 +3663,7 @@
       if (!target) return;
       target.rotation = ((target.rotation || 0) + 90) % 360;
       persistState();
-      renderLedgerPages();
+      renderAll();
     }
 
     function movePhotoItem(photoId, delta) {
@@ -3368,7 +3674,7 @@
       const [moved] = proj.photos.splice(idx, 1);
       proj.photos.splice(next, 0, moved);
       persistState();
-      renderLedgerPages();
+      renderAll();
     }
 
     async function deletePhotoItem(photoId) {
@@ -3380,7 +3686,6 @@
       const now = Date.now();
       const titleStr = `No.${idx + 1} [${deletedPhoto.workType || '工種未設定'}] ${deletedPhoto.location || '測点未設定'}`;
 
-      // 1. 30日削除保管庫へ保存
       await LedgerDB.putRecord('deleted_archive', {
         id: `del_ph_${now}_${Math.random().toString(36).slice(2, 5)}`,
         kind: 'photo',
@@ -3393,12 +3698,10 @@
       });
       await updateDeletedArchiveBadge();
 
-      // 2. 台帳本体から削除して再描画
       proj.photos.splice(idx, 1);
       await persistState();
       renderAll();
 
-      // 3. 削除指示を出した段階でDiscordへPDF＋JSONを送信（圏外時は通信回復時に自動送信）
       const webhookUrl = (appState.discordWebhookUrl || '').trim();
       if (webhookUrl) {
         try {
@@ -3748,16 +4051,17 @@
 
       persistState();
       closeModal('modal-chalkboard');
-      renderLedgerPages();
+      renderAll();
       showToast('電子小黒板の記載内容・行別文字色を反映しました');
     }
 
-    // ==================== 豆図 ＆ 写真直接ベクター編集エンジン ====================
+    // ==================== 豆図 ＆ 写真直接ベクター編集エンジン（90°/15°角度スナップ対応） ====================
     const mzState = {
       mode: 'mamezu',
       targetPhotoId: null,
       tool: 'pen',
       color: '#dc2626',
+      angleSnap: 'off',
       lineStyle: 'solid',
       arrowStart: 'none',
       arrowEnd: 'filled',
@@ -3774,8 +4078,33 @@
       startY: 0,
       lastX: 0,
       lastY: 0,
-      currentObj: null
+      currentObj: null,
+      hudText: ''
     };
+
+    function applyMzAngleSnap(x1, y1, x2, y2, mode, shiftKey = false) {
+      const activeMode = shiftKey && mode === 'off' ? '15' : mode;
+      const dx = x2 - x1;
+      const dy = y2 - y1;
+      const len = Math.hypot(dx, dy);
+      if (len < 2) return { x: x2, y: y2, deg: 0, len: 0, snapMode: activeMode };
+      if (activeMode === 'off') {
+        const rawDeg = Math.round(((Math.atan2(dy, dx) * 180) / Math.PI + 360) % 360);
+        return { x: x2, y: y2, deg: rawDeg, len: Math.round(len), snapMode: 'off' };
+      }
+      const stepDeg = activeMode === '90' ? 90 : 15;
+      const stepRad = (stepDeg * Math.PI) / 180;
+      const rawRad = Math.atan2(dy, dx);
+      const snapRad = Math.round(rawRad / stepRad) * stepRad;
+      const deg = Math.round(((snapRad * 180) / Math.PI + 360) % 360);
+      return {
+        x: Math.round(x1 + len * Math.cos(snapRad)),
+        y: Math.round(y1 + len * Math.sin(snapRad)),
+        deg,
+        len: Math.round(len),
+        snapMode: activeMode
+      };
+    }
 
     function openMamezuEditor(photoId, mode = 'mamezu') {
       const proj = getCurrentProject();
@@ -3785,9 +4114,9 @@
       mzState.mode = mode;
       mzState.targetPhotoId = photoId;
       mzState.selectedIndex = -1;
-      mzState.dragging = false;
       mzState.currentObj = null;
       mzState.basePhotoImg = null;
+      mzState.hudText = '';
 
       const header = document.getElementById('mz-modal-header');
       const title = document.getElementById('mz-modal-title');
@@ -3799,7 +4128,7 @@
 
       if (mode === 'photo') {
         if (!photo.imageDataUrl) {
-          showToast('先に写真枠へ画像を入れてから「写真編集」を押してください');
+          showToast('先に写真を取り込むか撮影してから「✏️ 写真編集」を押してください');
           return;
         }
         if (header) header.className = 'px-4 py-2.5 bg-amber-950 border-b border-amber-800 flex items-center justify-between shrink-0';
@@ -4215,9 +4544,32 @@
           ctx.lineWidth = 1.5;
           ctx.setLineDash([4, 3]);
           ctx.strokeRect(b.x - 4, b.y - 4, b.w + 8, b.h + 8);
+          if (obj.type === 'line' || obj.type === 'arrow' || obj.type === 'leader') {
+            ctx.setLineDash([]);
+            ctx.fillStyle = '#2563eb';
+            ctx.beginPath(); ctx.arc(obj.x1, obj.y1, 6, 0, Math.PI * 2); ctx.fill();
+            ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.5; ctx.stroke();
+            ctx.fillStyle = '#dc2626';
+            ctx.beginPath(); ctx.arc(obj.x2, obj.y2, 6, 0, Math.PI * 2); ctx.fill();
+            ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.5; ctx.stroke();
+          }
           ctx.restore();
         }
       });
+
+      if (mzState.hudText) {
+        ctx.save();
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
+        ctx.fillRect(W - 196, 8, 188, 22);
+        ctx.strokeStyle = '#fbbf24';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(W - 196, 8, 188, 22);
+        ctx.fillStyle = '#fde68a';
+        ctx.font = 'bold 11px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(mzState.hudText, W - 102, 23);
+        ctx.restore();
+      }
     }
 
     function initMamezuCanvasEvents() {
@@ -4237,6 +4589,19 @@
         mzState.dragging = true;
 
         if (mzState.tool === 'select') {
+          if (mzState.selectedIndex >= 0) {
+            const curSel = mzState.objects[mzState.selectedIndex];
+            if (curSel && (curSel.type === 'line' || curSel.type === 'arrow' || curSel.type === 'leader')) {
+              if (Math.hypot(pt.x - curSel.x1, pt.y - curSel.y1) <= 12) {
+                mzState.dragMode = 'end1';
+                return;
+              }
+              if (Math.hypot(pt.x - curSel.x2, pt.y - curSel.y2) <= 12) {
+                mzState.dragMode = 'end2';
+                return;
+              }
+            }
+          }
           let hit = -1;
           for (let i = mzState.objects.length - 1; i >= 0; i--) {
             const b = getMzObjBounds(mzState.objects[i]);
@@ -4271,7 +4636,20 @@
         const pt = getPt(e);
         const dx = pt.x - mzState.lastX, dy = pt.y - mzState.lastY;
         mzState.lastX = pt.x; mzState.lastY = pt.y;
-        if (mzState.dragMode === 'move' && mzState.selectedIndex >= 0) {
+        if ((mzState.dragMode === 'end1' || mzState.dragMode === 'end2') && mzState.selectedIndex >= 0) {
+          const o = mzState.objects[mzState.selectedIndex];
+          if (o) {
+            const isEnd1 = mzState.dragMode === 'end1';
+            const ax = isEnd1 ? o.x2 : o.x1;
+            const ay = isEnd1 ? o.y2 : o.y1;
+            const snapped = applyMzAngleSnap(ax, ay, pt.x, pt.y, mzState.angleSnap, e.shiftKey);
+            if (isEnd1) { o.x1 = snapped.x; o.y1 = snapped.y; }
+            else { o.x2 = snapped.x; o.y2 = snapped.y; }
+            const tag = snapped.snapMode === '90' ? ' [90°]' : (snapped.snapMode === '15' ? ' [15°]' : '');
+            mzState.hudText = `${snapped.deg}° / ${snapped.len}px${tag}`;
+            renderMamezuCanvas();
+          }
+        } else if (mzState.dragMode === 'move' && mzState.selectedIndex >= 0) {
           const o = mzState.objects[mzState.selectedIndex];
           if (o.type === 'pen') o.points.forEach(p => { p.x += dx; p.y += dy; });
           else if (o.type === 'line' || o.type === 'arrow' || o.type === 'leader') { o.x1 += dx; o.y1 += dy; o.x2 += dx; o.y2 += dy; }
@@ -4279,15 +4657,25 @@
           renderMamezuCanvas();
         } else if (mzState.dragMode === 'draw' && mzState.currentObj) {
           const o = mzState.currentObj;
-          if (o.type === 'pen') o.points.push(pt);
-          else if (o.type === 'line' || o.type === 'arrow' || o.type === 'leader') { o.x2 = pt.x; o.y2 = pt.y; }
-          else { o.w = pt.x - mzState.startX; o.h = pt.y - mzState.startY; }
+          if (o.type === 'pen') {
+            o.points.push(pt);
+          } else if (o.type === 'line' || o.type === 'arrow' || o.type === 'leader') {
+            const snapped = applyMzAngleSnap(o.x1, o.y1, pt.x, pt.y, mzState.angleSnap, e.shiftKey);
+            o.x2 = snapped.x;
+            o.y2 = snapped.y;
+            const tag = snapped.snapMode === '90' ? ' [90°]' : (snapped.snapMode === '15' ? ' [15°]' : '');
+            mzState.hudText = `${snapped.deg}° / ${snapped.len}px${tag}`;
+          } else {
+            o.w = pt.x - mzState.startX;
+            o.h = pt.y - mzState.startY;
+          }
           renderMamezuCanvas();
         }
       };
       const onUp = () => {
         if (!mzState.dragging) return;
         mzState.dragging = false;
+        mzState.hudText = '';
         if (mzState.dragMode === 'draw' && mzState.currentObj) {
           const o = mzState.currentObj;
           if (['rect', 'circle', 'cloud', 'hatch'].includes(o.type)) {
@@ -4299,6 +4687,8 @@
           mzState.selectedIndex = mzState.objects.length - 1;
           if (o.type !== 'pen') mzState.tool = 'select';
           syncMamezuUiControls();
+          renderMamezuCanvas();
+        } else if (mzState.dragMode === 'end1' || mzState.dragMode === 'end2') {
           renderMamezuCanvas();
         }
         mzState.dragMode = null;
@@ -4408,7 +4798,7 @@
       }
       persistState();
       closeModal('modal-mamezu');
-      renderLedgerPages();
+      renderAll();
     }
 
     async function saveMamezuToPhoto(alsoExportToFieldnote = false) {
@@ -4428,7 +4818,7 @@
         photo.photoEditState = serializedObjs;
         persistState();
         closeModal('modal-mamezu');
-        renderLedgerPages();
+        renderAll();
         showToast('編集後の写真を台帳へ反映しました');
       } else {
         photo.mamezuDataUrl = pngDataUrl;
@@ -4440,7 +4830,7 @@
         };
         persistState();
         closeModal('modal-mamezu');
-        renderLedgerPages();
+        renderAll();
         if (alsoExportToFieldnote) {
           await exportMamezuToFieldnote(photo.id);
         } else {
@@ -4828,235 +5218,334 @@
 
       updateAutoSaveUi();
       updatePrintStyleRule(proj.paperFormat);
-      renderLedgerPages();
+      applyGuiModeLayout();
     }
 
-    // ==================== JSON / Discord PDF+JSON送信（通信回復時自動再送対応） / 外部アプリ連携 ====================
-    function openDataModal() { openModal('modal-data'); }
-    function openDiscordModal() {
-      const inp = document.getElementById('ledger-webhook-input');
-      if (inp) inp.value = appState.discordWebhookUrl || '';
-      openModal('modal-discord');
+    // ==================== 📱 スマホ専用GUI ⇔ 💻 PCフル機能GUI 統合切替 ====================
+    let guiModeSetting = 'auto'; // 'auto' | 'mobile' | 'pc'
+    let mobileCbTargetPhotoId = null;
+
+    const STANDARD_MOBILE_CHALKBOARDS = [
+      { id: 'pre',     label: '着工前確認',   workType: '着工前確認',   line1: '着工前状況確認',   style: 'green_classic' },
+      { id: 'work',    label: '施工状況',     workType: '施工状況',     line1: '施工状況記録',     style: 'green_classic' },
+      { id: 'rebar',   label: '配筋検査',     workType: '鉄筋配筋工',   line1: '配筋径・ピッチ確認', style: 'green_classic' },
+      { id: 'measure', label: '出来形検測',   workType: '出来形管理',   line1: '設計値・実測値検測', style: 'dark_slate' },
+      { id: 'safety',  label: '安全養生確認', workType: '安全養生工',   line1: '安全パトロール確認', style: 'white_board' },
+      { id: 'done',    label: '施工完了確認', workType: '完了確認',     line1: '自主検査完了確認', style: 'green_classic' }
+    ];
+
+    function isMobileGuiActive() {
+      if (guiModeSetting === 'mobile') return true;
+      if (guiModeSetting === 'pc') return false;
+      return window.innerWidth < 768;
     }
 
-    function exportLedgerJson() {
+    function setGuiMode(mode) {
+      guiModeSetting = mode;
+      applyGuiModeLayout();
+      showToast(isMobileGuiActive() ? '📱 スマホ専用GUIに切り替えました' : '💻 PCフル機能GUIに切り替えました');
+    }
+
+    function toggleGuiMode() {
+      setGuiMode(isMobileGuiActive() ? 'pc' : 'mobile');
+    }
+
+    function applyGuiModeLayout() {
+      const isMobile = isMobileGuiActive();
+      const pcBar = document.getElementById('pc-sub-toolbar');
+      const pcMain = document.getElementById('ledger-scroll-area');
+      const mobSec = document.getElementById('mobile-gui-container');
+      const modeIcon = document.getElementById('ui-mode-icon');
+      const modeLbl = document.getElementById('ui-mode-label');
+
+      if (pcBar) pcBar.classList.toggle('hidden', isMobile);
+      if (pcMain) pcMain.classList.toggle('hidden', isMobile);
+      if (mobSec) {
+        mobSec.classList.toggle('hidden', !isMobile);
+        mobSec.classList.toggle('flex', isMobile);
+      }
+      if (modeIcon) modeIcon.textContent = isMobile ? '💻' : '📱';
+      if (modeLbl) modeLbl.textContent = isMobile ? 'PCフル版' : 'スマホUI';
+
+      if (isMobile) {
+        renderMobileGuiCards();
+      } else {
+        renderLedgerPages();
+      }
+    }
+
+    function renderMobileGuiCards() {
+      const listEl = document.getElementById('mobile-photo-cards-list');
+      const sumEl = document.getElementById('mob-gui-summary');
+      if (!listEl) return;
       const proj = getCurrentProject();
-      const blob = new Blob([JSON.stringify(proj, null, 2)], { type: 'application/json' });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `construction_ledger_${Date.now()}.json`;
-      document.body.appendChild(a); a.click(); document.body.removeChild(a);
-      closeModal('modal-data');
-      showToast('台帳プロジェクトJSONを保存しました');
+      if (sumEl) {
+        sumEl.textContent = `📱 ${proj.projectName}（全 ${proj.photos.length} 枚）`;
+      }
+
+      if (proj.photos.length === 0) {
+        listEl.innerHTML = `
+          <div class="p-8 rounded-2xl bg-slate-900 border border-dashed border-slate-700 text-center space-y-2">
+            <div class="text-3xl">📸</div>
+            <div class="font-bold text-slate-300">下の「📸 撮影追加」または「🖼️ アルバム」から写真を追加してください</div>
+          </div>
+        `;
+        return;
+      }
+
+      listEl.innerHTML = proj.photos.map((photo, idx) => {
+        const htmlBody = typeof photo.commentHtml === 'string'
+          ? photo.commentHtml
+          : escapeHtml(photo.comment || '').replace(/\n/g, '<br>');
+        const cbHtml = buildChalkboardOverlayHtml(photo, proj, false);
+
+        return `
+          <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg">
+            <div class="px-3 py-2 bg-slate-800/80 flex items-center justify-between gap-2 text-xs">
+              <span class="font-extrabold text-amber-300">No.${idx + 1} ${escapeHtml(photo.workType || '工種未設定')}</span>
+              <div class="flex items-center gap-1">
+                <button onclick="openMobileChalkboardPicker('${photo.id}')" class="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-600 text-white rounded-lg font-extrabold text-[11px] cursor-pointer">
+                  🟩 黒板載せ
+                </button>
+                <button onclick="openMamezuEditor('${photo.id}', 'photo')" class="px-2 py-1 bg-amber-700 hover:bg-amber-600 text-white rounded-lg font-bold text-[11px] cursor-pointer">
+                  ✏️ 注釈
+                </button>
+                <button onclick="deletePhotoItem('${photo.id}')" class="px-2 py-1 bg-rose-950 hover:bg-rose-800 text-rose-200 rounded-lg font-bold text-[11px] cursor-pointer">
+                  🗑️
+                </button>
+              </div>
+            </div>
+
+            <div class="relative h-56 bg-black flex items-center justify-center overflow-hidden">
+              ${photo.imageDataUrl
+                ? `<img src="${photo.imageDataUrl}" style="transform:rotate(${photo.rotation || 0}deg);" class="w-full h-full object-contain" />`
+                : `<div class="text-slate-400 text-xs text-center p-4">📷 写真未撮影（「📸 撮影」でカメラ起動）</div>`
+              }
+              ${cbHtml}
+            </div>
+
+            <div class="p-3 space-y-2 text-xs">
+              <div class="grid grid-cols-2 gap-2">
+                <label class="relative overflow-hidden py-2 bg-teal-700 hover:bg-teal-600 text-white rounded-xl font-bold text-center cursor-pointer">
+                  <span>📸 この枠を撮影</span>
+                  <input type="file" accept="image/*" capture="environment" onchange="replaceSinglePhoto('${photo.id}', event)" class="absolute inset-0 opacity-0 cursor-pointer" />
+                </label>
+                <label class="relative overflow-hidden py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded-xl font-bold text-center cursor-pointer">
+                  <span>🖼️ 写真差替</span>
+                  <input type="file" accept="image/*" onchange="replaceSinglePhoto('${photo.id}', event)" class="absolute inset-0 opacity-0 cursor-pointer" />
+                </label>
+              </div>
+
+              <div class="grid grid-cols-2 gap-2">
+                <input type="text" value="${escapeHtml(photo.workType || '')}" placeholder="工種を入力"
+                       oninput="updatePhotoField('${photo.id}', 'workType', this.value)"
+                       class="bg-slate-950 border border-slate-700 rounded-xl px-2.5 py-2 text-white font-bold outline-none focus:border-emerald-400" />
+                <input type="text" value="${escapeHtml(photo.location || '')}" placeholder="測点・箇所を入力"
+                       oninput="updatePhotoField('${photo.id}', 'location', this.value)"
+                       class="bg-slate-950 border border-slate-700 rounded-xl px-2.5 py-2 text-white font-bold outline-none focus:border-emerald-400" />
+              </div>
+
+              <div class="flex gap-1 overflow-x-auto pb-0.5 text-[10px]">
+                ${['施工状況確認', '配筋・寸法異常なし', '安全養生完了', '是正措置完了'].map(chip => `
+                  <button type="button" onclick="appendMobileCommentChip('${photo.id}', '${chip}')" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-full text-slate-200 font-bold whitespace-nowrap cursor-pointer">
+                    ＋${chip}
+                  </button>
+                `).join('')}
+              </div>
+
+              <div contenteditable="true"
+                   data-rich-memo="${photo.id}"
+                   data-placeholder="撮影状況・メモを入力..."
+                   oninput="syncRichMemoToState('${photo.id}', this)"
+                   class="w-full min-h-[56px] bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-white leading-snug outline-none focus:border-sky-400 whitespace-pre-wrap break-words">${htmlBody}</div>
+            </div>
+          </div>
+        `;
+      }).join('');
     }
 
-    function importLedgerJson(event) {
+    async function handleMobileQuickCameraCapture(event) {
       const file = event.target.files?.[0];
       if (!file) return;
-      const reader = new FileReader();
-      reader.onload = e => {
-        try {
-          const parsed = JSON.parse(e.target.result);
-          if (parsed && Array.isArray(parsed.photos)) {
-            parsed.id = 'proj_' + Date.now();
-            appState.projects.push(parsed);
-            appState.currentProjectIndex = appState.projects.length - 1;
-            persistState();
-            closeModal('modal-data');
-            renderAll();
-            showToast(`「${parsed.projectName || '読込台帳'}」を追加しました`);
-          }
-        } catch (_) {
-          showToast('JSONファイルの形式が正しくありません');
+      showToast('📸 カメラ撮影写真を取り込んでいます...');
+      try {
+        const dataUrl = await compressImageFile(file);
+        const proj = getCurrentProject();
+        const emptySlot = proj.photos.find(p => !p.imageDataUrl);
+        if (emptySlot) {
+          emptySlot.imageDataUrl = dataUrl;
+          emptySlot.originalImageDataUrl = dataUrl;
+          emptySlot.date = getTodayDateTimeStr();
+        } else {
+          addPhotoItem({
+            sourceType: 'standalone',
+            pinLabel: '📸 スマホ撮影',
+            date: getTodayDateTimeStr(),
+            imageDataUrl: dataUrl,
+            silent: true
+          });
         }
-      };
-      reader.readAsText(file);
+        await persistState();
+        renderAll();
+        showToast('✅ 撮影した写真を台帳に載せました！');
+      } catch (_) {
+        showToast('写真の読み込みに失敗しました');
+      }
       event.target.value = '';
     }
 
-    function importSampleBlueprintPins() {
-      const nowStr = getTodayDateTimeStr();
-      addPhotoItem({
-        sourceType: 'pin',
-        pinLabel: '📍 ピン④ 連動',
-        workType: '鉄筋配筋工',
-        location: '1F スラブ開口補強筋',
-        date: nowStr,
-        comment: '図面メモの管理ピンから取り込んだ記録枠です。',
-        silent: true
-      });
+    function appendMobileCommentChip(photoId, text) {
+      const editorEl = document.querySelector(`[data-rich-memo="${photoId}"]`);
+      if (!editorEl) return;
+      const cur = editorEl.innerText.trim();
+      editorEl.innerText = cur ? `${cur}\n${text}` : text;
+      syncRichMemoToState(photoId, editorEl);
+    }
+
+    function openMobileChalkboardPicker(photoId) {
+      mobileCbTargetPhotoId = photoId;
+      const proj = getCurrentProject();
+      const idx = proj.photos.findIndex(p => p.id === photoId);
+      const titleEl = document.getElementById('mob-cb-picker-title');
+      if (titleEl) titleEl.textContent = `🟩 No.${idx + 1} に用意した写真黒板を載せる`;
+
+      const presetGrid = document.getElementById('mob-cb-presets-grid');
+      if (presetGrid) {
+        presetGrid.innerHTML = STANDARD_MOBILE_CHALKBOARDS.map(pr => `
+          <button onclick="applyMobileChalkboardPreset('${pr.id}')" class="p-2.5 rounded-xl bg-emerald-950/80 hover:bg-emerald-800 border border-emerald-700 text-left space-y-0.5 cursor-pointer">
+            <div class="font-extrabold text-emerald-200">${escapeHtml(pr.label)}</div>
+            <div class="text-[10px] text-slate-300 truncate">${escapeHtml(pr.line1)}</div>
+          </button>
+        `).join('');
+      }
+
+      renderMyChalkboardPresetsList();
+      openModal('modal-mobile-chalkboard-picker');
+    }
+
+    function applyMobileChalkboardPreset(presetId) {
+      const pr = STANDARD_MOBILE_CHALKBOARDS.find(x => x.id === presetId);
+      const proj = getCurrentProject();
+      const photo = proj.photos.find(p => p.id === mobileCbTargetPhotoId);
+      if (!pr || !photo) return;
+      proj.showMiniChalkboard = true;
+      photo.workType = pr.workType;
+      photo.date = getTodayDateTimeStr();
+      if (!photo.chalkboard) photo.chalkboard = createEmptyChalkboardObj();
+      photo.chalkboard.hideOnPhoto = false;
+      photo.chalkboard.line1Text = pr.line1;
+      photo.chalkboard.customStyle = pr.style;
       persistState();
+      closeModal('modal-mobile-chalkboard-picker');
       renderAll();
-      showToast('図面メモの管理ピンを取り込みました');
+      showToast(`🟩 黒板「${pr.label}」を載せました`);
     }
 
-    function saveWebhookOnly() {
-      appState.discordWebhookUrl = (document.getElementById('ledger-webhook-input')?.value || '').trim();
-      persistState(true);
-      closeModal('modal-discord');
-      showToast('Discord Webhook URLを保存しました（一時保存・削除時の自動送信にも使われます）');
-    }
-
-    async function updateLedgerOutboxBadge() {
-      const badge = document.getElementById('ledger-outbox-badge');
-      if (!badge) return;
-      const list = await LedgerDB.getAllRecords('outbox');
-      if (list.length > 0) {
-        badge.textContent = `⏳ 送信待機 ${list.length}件`;
-        badge.classList.remove('hidden');
-      } else {
-        badge.classList.add('hidden');
-      }
-    }
-
-    async function postLedgerRecordToDiscord(rec) {
-      const fd = new FormData();
-      fd.append('payload_json', JSON.stringify({ content: rec.content }));
-      let fileIdx = 0;
-      if (rec.pdfBlob) {
-        fd.append(`file${fileIdx++}`, rec.pdfBlob, rec.pdfFileName || `ledger_${Date.now()}.pdf`);
-      }
-      if (rec.jsonText) {
-        fd.append(`file${fileIdx++}`, new Blob([rec.jsonText], { type: 'application/json' }), rec.jsonFileName || `ledger_${Date.now()}.json`);
-      }
-      const res = await fetch(rec.webhookUrl, { method: 'POST', body: fd });
-      return res.ok;
-    }
-
-    async function enqueueOrSendLedgerDiscordRecord(outboxRecord, sentToastMsg, queuedToastMsg) {
-      if (!navigator.onLine) {
-        await LedgerDB.putRecord('outbox', outboxRecord);
-        await updateLedgerOutboxBadge();
-        showToast(queuedToastMsg);
-        return false;
-      }
-
+    function getMyChalkboardPresets() {
       try {
-        const ok = await postLedgerRecordToDiscord(outboxRecord);
-        if (ok) {
-          showToast(sentToastMsg);
-          return true;
-        }
-      } catch (_) {}
-
-      await LedgerDB.putRecord('outbox', outboxRecord);
-      await updateLedgerOutboxBadge();
-      showToast(queuedToastMsg);
-      return false;
+        return JSON.parse(localStorage.getItem('genba_my_chalkboard_presets_v1') || '[]');
+      } catch (_) {
+        return [];
+      }
     }
 
-    let isFlushingLedgerOutbox = false;
-    async function flushLedgerOutboxQueue(isSilent = false) {
-      if (isFlushingLedgerOutbox || !navigator.onLine) return;
-      const queue = await LedgerDB.getAllRecords('outbox');
-      if (!queue.length) {
-        await updateLedgerOutboxBadge();
+    function registerCurrentPhotoAsMyChalkboard() {
+      const proj = getCurrentProject();
+      const photo = proj.photos.find(p => p.id === mobileCbTargetPhotoId);
+      if (!photo) return;
+      const list = getMyChalkboardPresets();
+      const name = `${photo.workType || 'マイ黒板'} (${photo.location || '共通'})`;
+      list.unshift({
+        id: 'mycb_' + Date.now(),
+        name,
+        workType: photo.workType || '',
+        location: photo.location || '',
+        chalkboard: JSON.parse(JSON.stringify(photo.chalkboard || createEmptyChalkboardObj()))
+      });
+      localStorage.setItem('genba_my_chalkboard_presets_v1', JSON.stringify(list.slice(0, 12)));
+      renderMyChalkboardPresetsList();
+      showToast(`⭐ 「${name}」をマイ黒板に登録しました`);
+    }
+
+    function renderMyChalkboardPresetsList() {
+      const box = document.getElementById('mob-cb-my-list');
+      if (!box) return;
+      const list = getMyChalkboardPresets();
+      if (list.length === 0) {
+        box.innerHTML = `<div class="col-span-2 text-slate-400 text-[10px] py-2">右上の「＋ この写真の黒板を登録」でマイ黒板を保存できます</div>`;
         return;
       }
-      isFlushingLedgerOutbox = true;
-      queue.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
-      let sent = 0;
-      for (const item of queue) {
-        try {
-          const ok = await postLedgerRecordToDiscord(item);
-          if (ok) {
-            await LedgerDB.deleteRecord('outbox', item.id);
-            sent++;
-          }
-        } catch (_) {
-          break;
-        }
-      }
-      isFlushingLedgerOutbox = false;
-      await updateLedgerOutboxBadge();
-      if (sent > 0 && !isSilent) {
-        showToast(`✅ 通信回復：待機していたPDF＋JSON送信 ${sent}件 をDiscordへ自動送信しました！`);
-      }
+      box.innerHTML = list.map((item, idx) => `
+        <button onclick="applyMyChalkboardPreset(${idx})" class="p-2 rounded-xl bg-slate-800 hover:bg-cyan-900 border border-slate-700 text-left space-y-0.5 cursor-pointer">
+          <div class="font-extrabold text-cyan-200 truncate">⭐ ${escapeHtml(item.name)}</div>
+          <div class="text-[10px] text-slate-400 truncate">${escapeHtml(item.chalkboard?.line1Text || '')}</div>
+        </button>
+      `).join('');
     }
 
-    async function sendLedgerToDiscord() {
-      const url = (document.getElementById('ledger-webhook-input')?.value || '').trim();
-      const msg = (document.getElementById('ledger-discord-msg')?.value || '').trim() || '本日の工事写真台帳（PDF）を共有します。';
-      const attachPdf = document.getElementById('chk-discord-attach-pdf')?.checked !== false;
-      const attachJson = document.getElementById('chk-discord-attach-json')?.checked !== false;
-
-      appState.discordWebhookUrl = url;
-      await persistState(true);
-
-      if (!url) {
-        closeModal('modal-discord');
-        showToast('Webhook URL未設定のため、ローカル保存のみ完了しました');
-        return;
-      }
-
-      const sendBtn = document.getElementById('btn-execute-discord-pdf-send');
-      if (sendBtn) {
-        sendBtn.disabled = true;
-        sendBtn.textContent = '⏳ 台帳PDF・JSONを生成・送信中...';
-      }
-
-      try {
-        const proj = getCurrentProject();
-        const ts = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
-        const safeName = String(proj.projectName || 'construction_ledger').replace(/[\\/:*?"<>|\s]+/g, '_').slice(0, 28);
-        const lines = proj.photos.map((p, i) => `No.${i + 1} [${p.workType || '-'}] ${p.location || '-'} : ${p.comment || ''}`).join('\n');
-
-        let pdfBlob = null;
-        if (attachPdf) {
-          pdfBlob = await generateLedgerPdfBlobForDiscordOrDownload(9.2 * 1024 * 1024);
-        }
-
-        const outboxRecord = {
-          id: `outbox_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`,
-          webhookUrl: url,
-          content: `📷 **${proj.projectName}**（${proj.photos.length}枚）\n${msg}\n\`\`\`\n${lines.slice(0, 1400)}\n\`\`\``,
-          pdfBlob,
-          pdfFileName: `${safeName}_${ts}.pdf`,
-          jsonText: attachJson ? JSON.stringify(proj, null, 2) : null,
-          jsonFileName: `${safeName}_${ts}.json`,
-          createdAt: Date.now()
-        };
-
-        closeModal('modal-discord');
-        await enqueueOrSendLedgerDiscordRecord(
-          outboxRecord,
-          '✅ 台帳PDF＋JSONをDiscordへ送信しました！',
-          '⏳ オフラインのため台帳PDF＋JSONを送信待機キューへ一時保存しました（通信回復時に自動送信）'
-        );
-      } catch (err) {
-        showToast(`❌ PDF生成・送信エラー: ${err.message}`);
-      } finally {
-        if (sendBtn) {
-          sendBtn.disabled = false;
-          sendBtn.textContent = '📤 台帳PDF＋JSONを生成してDiscordへ送信';
-        }
-      }
+    function applyMyChalkboardPreset(idx) {
+      const list = getMyChalkboardPresets();
+      const item = list[idx];
+      const proj = getCurrentProject();
+      const photo = proj.photos.find(p => p.id === mobileCbTargetPhotoId);
+      if (!item || !photo) return;
+      proj.showMiniChalkboard = true;
+      photo.workType = item.workType;
+      photo.location = item.location;
+      photo.date = getTodayDateTimeStr();
+      photo.chalkboard = JSON.parse(JSON.stringify(item.chalkboard));
+      photo.chalkboard.hideOnPhoto = false;
+      persistState();
+      closeModal('modal-mobile-chalkboard-picker');
+      renderAll();
+      showToast(`⭐ マイ黒板「${item.name}」を載せました`);
     }
 
+    function toggleSinglePhotoChalkboardHide() {
+      const proj = getCurrentProject();
+      const photo = proj.photos.find(p => p.id === mobileCbTargetPhotoId);
+      if (!photo) return;
+      if (!photo.chalkboard) photo.chalkboard = createEmptyChalkboardObj();
+      photo.chalkboard.hideOnPhoto = !photo.chalkboard.hideOnPhoto;
+      persistState();
+      closeModal('modal-mobile-chalkboard-picker');
+      renderAll();
+      showToast(photo.chalkboard.hideOnPhoto ? 'この写真の黒板を非表示にしました' : 'この写真の黒板を表示しました');
+    }
+
+    // ==================== 図面メモ本体との双方向連携（postMessage） ====================
     function sendLedgerToHostApp() {
-      const payload = { type: 'LEDGER_EXPORT_DATA', project: JSON.parse(JSON.stringify(getCurrentProject())) };
-      if (window.parent && window.parent !== window) window.parent.postMessage(payload, '*');
-      if (window.opener) window.opener.postMessage(payload, '*');
-      showToast('図面メモ本体へ台帳データを送信しました');
+      const proj = getCurrentProject();
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: 'LEDGER_EXPORT_DATA', project: proj }, '*');
+        showToast('📌 図面メモ本体へ写真台帳データを送信しました');
+      }
     }
 
     window.addEventListener('message', event => {
-      const msg = event.data;
-      if (!msg || typeof msg !== 'object') return;
-      if (msg.type === 'LEDGER_IMPORT_PINS' && Array.isArray(msg.pins)) {
-        msg.pins.forEach(pin => {
+      const data = event.data;
+      if (!data || typeof data !== 'object') return;
+      if (data.type === 'LEDGER_IMPORT_PINS' && Array.isArray(data.pins)) {
+        data.pins.forEach(p => {
           addPhotoItem({
             sourceType: 'pin',
-            pinLabel: `📍 ピン${pin.numLabel || ''} 連動`,
-            workType: pin.typeLabel || '',
-            location: pin.location || '',
-            comment: pin.comment || '',
+            pinLabel: `📍 ピン${p.numLabel || ''} 連動`,
+            workType: p.typeLabel || '',
+            location: p.location || '',
+            comment: p.comment || '',
+            imageDataUrl: p.imageDataUrl || null,
             silent: true
           });
         });
         persistState();
         renderAll();
-        showToast(`図面メモから ${msg.pins.length} 件のピンを取り込みました`);
+        showToast(`📍 図面メモから ${data.pins.length} 件のピン写真枠を取り込みました`);
+      }
+    });
+
+    window.addEventListener('resize', () => {
+      if (guiModeSetting === 'auto') {
+        applyGuiModeLayout();
       }
     });
 
