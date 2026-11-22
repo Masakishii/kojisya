@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>工事写真台帳・工事台帳管理システム（クラウド同期対応版）</title>
+  <title>工事写真台帳・工事台帳管理システム</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style id="dynamic-ledger-print-style">@page { size: A4 portrait; margin: 0mm; }</style>
   <style>
@@ -16,6 +16,13 @@
       color: #0f172a;
       margin: 0;
       padding: 0;
+    }
+
+    /* リッチメモ欄プレースホルダー */
+    [data-rich-memo]:empty:before {
+      content: attr(data-placeholder);
+      color: #94a3b8;
+      pointer-events: none;
     }
 
     /* A4縦 / A4横 / A3縦 / A3横 台帳シート（画面プレビュー時） */
@@ -250,13 +257,10 @@
         background: transparent !important;
         resize: none !important;
       }
-      .no-print-textarea {
-        display: none !important;
-      }
-      .print-only-memo {
-        display: block !important;
-        white-space: pre-wrap !important;
-        word-break: break-word !important;
+      [data-rich-memo] {
+        border-color: transparent !important;
+        background: transparent !important;
+        padding: 0 !important;
       }
     }
   </style>
@@ -266,35 +270,61 @@
   <!-- ==================== 1. トップヘッダー ==================== -->
   <header class="no-print sticky top-0 z-40 bg-slate-900 text-white border-b border-slate-800 px-3 py-2 shadow-lg">
     <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
-      <!-- 左：台帳プロジェクト切替 ＆ 自動保存ON/OFF -->
-      <div class="flex flex-wrap items-center gap-2 min-w-0">
-        <button onclick="openProjectModal()" class="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 border-l-4 border-amber-500 border border-slate-700 px-2.5 py-1.5 rounded-lg min-w-0 max-w-[190px] sm:max-w-[240px] cursor-pointer" title="現場・台帳プロジェクトを切り替え・新規作成">
+      <!-- 左：台帳プロジェクト切替 ＆ 自動保存ON/OFF ＆ 一時保存（Discord連携） ＆ 30日削除保管庫 -->
+      <div class="flex flex-wrap items-center gap-1.5 min-w-0">
+        <button onclick="openProjectModal()" class="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 border-l-4 border-amber-500 border border-slate-700 px-2.5 py-1.5 rounded-lg min-w-0 max-w-[175px] sm:max-w-[215px] cursor-pointer" title="現場・台帳プロジェクトを切り替え・新規作成">
           <span class="text-base shrink-0">📷</span>
           <span id="header-project-name" class="font-extrabold text-xs sm:text-sm truncate">○○新築工事 工事写真台帳</span>
           <span class="text-[10px] text-amber-300 font-bold shrink-0">▾</span>
         </button>
 
-        <div class="inline-flex items-center gap-1.5 bg-slate-800/90 border border-slate-700 px-2 py-1 rounded-lg text-[11px]">
+        <div class="inline-flex items-center gap-1 bg-slate-800/90 border border-slate-700 px-2 py-1 rounded-lg text-[11px]">
           <label class="inline-flex items-center gap-1 font-bold cursor-pointer select-none" title="編集内容を端末内へ自動保存するかどうかを切り替えます">
             <input id="chk-autosave" type="checkbox" checked onchange="toggleAutoSave(this.checked)" class="accent-emerald-500 cursor-pointer" />
-            <span id="autosave-status" class="text-emerald-300 font-bold whitespace-nowrap">● 自動保存: ON</span>
+            <span id="autosave-status" class="text-emerald-300 font-bold whitespace-nowrap">● 自動保存</span>
           </label>
-          <button id="btn-manual-save" onclick="manualSaveNow()" class="px-2 py-0.5 bg-emerald-700 hover:bg-emerald-600 text-white rounded font-extrabold text-[10px] cursor-pointer whitespace-nowrap" title="現在の台帳状態を今すぐ端末へ保存します">
+          <button id="btn-manual-save" onclick="manualSaveNow()" class="px-1.5 py-0.5 bg-emerald-700 hover:bg-emerald-600 text-white rounded font-extrabold text-[10px] cursor-pointer whitespace-nowrap" title="現在の台帳状態を今すぐ端末へ保存します">
             💾 保存
           </button>
         </div>
+
+        <!-- 一時保存（端末保管 ＋ DiscordへPDF/JSON送信・圏外時は通信回復時に自動送信） -->
+        <div class="inline-flex items-center bg-amber-950/90 border border-amber-600/70 rounded-lg overflow-hidden text-[11px] font-extrabold">
+          <button onclick="saveTempDraftSnapshot()" class="px-2 py-1 hover:bg-amber-800 text-amber-200 flex items-center gap-1 cursor-pointer whitespace-nowrap" title="現在の作業状態を一時保管し、PDFとJSONをDiscordへ自動送信します（圏外時は通信回復時に自動送信）">
+            <span>⏸️</span><span>一時保存</span>
+          </button>
+          <button onclick="openTempDraftsModal()" id="btn-temp-drafts-count" class="px-2 py-1 bg-amber-900/90 hover:bg-amber-700 border-l border-amber-700 text-white font-mono text-[10px] cursor-pointer whitespace-nowrap" title="一時保存した下書き一覧を開く">
+            保管(0) ▾
+          </button>
+        </div>
+
+        <!-- 30日削除保管庫バッジ -->
+        <button onclick="openDeletedArchiveModal()" id="btn-deleted-archive-count" class="bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-300 text-[10px] font-bold px-2 py-1 rounded-lg cursor-pointer whitespace-nowrap" title="台帳から削除したデータ（30日経過後に自動消去・削除時にDiscord送信）">
+          🗑️ 30日保管(0)
+        </button>
+
+        <!-- オフライン送信待機キューバッジ -->
+        <button id="ledger-outbox-badge" onclick="flushLedgerOutboxQueue(false)" class="hidden bg-rose-950 hover:bg-rose-900 border border-rose-500/80 text-rose-200 text-[10px] font-extrabold px-2.5 py-1 rounded-full animate-pulse cursor-pointer whitespace-nowrap" title="圏外・通信保留中のDiscord PDF/JSON送信データ（通信回復時に自動送信／タップで今すぐ再送）">
+          ⏳ 送信待機 0
+        </button>
       </div>
 
-      <!-- 右：クラウド同期・写真一括追加・JSON・Discord・印刷 -->
+      <!-- 右：クラウド同期・カメラ撮影・一括読込・Discord PDF送信・PDF保存/印刷 -->
       <div class="flex flex-wrap items-center gap-1.5 text-xs font-bold">
         <button id="btn-embed-return" onclick="sendLedgerToHostApp()" class="hidden bg-teal-600 hover:bg-teal-500 active:scale-95 text-white px-2.5 py-1.5 rounded-lg items-center gap-1 shadow cursor-pointer whitespace-nowrap">
           <span>📌</span><span>図面本体へ送信</span>
         </button>
 
-        <button id="btn-cloud-sync-header" onclick="openCloudSyncModal()" class="bg-cyan-700 hover:bg-cyan-600 active:scale-95 text-white px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 shadow border border-cyan-500/60 cursor-pointer whitespace-nowrap" title="同期サーバーと現場キーで接続・野帳と豆図/写真を共有">
+        <button id="btn-cloud-sync-header" onclick="openCloudSyncModal()" class="bg-cyan-700 hover:bg-cyan-600 active:scale-95 text-white px-2.5 py-1.5 rounded-lg flex items-center gap-1 shadow border border-cyan-500/60 cursor-pointer whitespace-nowrap" title="同期サーバーと現場キーで接続・サーバー不要写真削除・野帳と共有">
           <span>☁️</span>
           <span id="cloud-sync-header-label">クラウド未設定</span>
         </button>
+
+        <!-- スマホ・タブレットのカメラ直接撮影ボタン -->
+        <label class="relative overflow-hidden bg-teal-600 hover:bg-teal-500 active:scale-95 text-white px-2.5 py-1.5 rounded-lg flex items-center gap-1 shadow cursor-pointer whitespace-nowrap" title="スマホ・タブレットのカメラを起動して撮影し、そのまま台帳の写真材料として追加します">
+          <span>📸 カメラ撮影</span>
+          <input type="file" accept="image/*" capture="environment" onchange="handleCameraCaptureUpload(event)" class="absolute inset-0 opacity-0 cursor-pointer" />
+        </label>
 
         <label class="relative overflow-hidden bg-sky-600 hover:bg-sky-500 active:scale-95 text-white px-2.5 py-1.5 rounded-lg flex items-center gap-1 shadow cursor-pointer whitespace-nowrap">
           <span>📁 一括読込</span>
@@ -305,16 +335,20 @@
           <span>＋</span><span>自由写真枠</span>
         </button>
 
-        <button onclick="openDiscordModal()" class="bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white px-2.5 py-1.5 rounded-lg flex items-center gap-1 cursor-pointer whitespace-nowrap">
-          <span>🚀</span><span class="hidden md:inline">Discord</span>
+        <button onclick="openDiscordModal()" class="bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white px-2.5 py-1.5 rounded-lg flex items-center gap-1 shadow cursor-pointer whitespace-nowrap" title="台帳PDF・JSONを生成してDiscordへ直接送信（圏外時は通信回復時に自動送信）">
+          <span>🚀</span><span>Discord PDF送信</span>
         </button>
 
-        <button onclick="openDataModal()" class="bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 px-2.5 py-1.5 rounded-lg flex items-center gap-1 cursor-pointer whitespace-nowrap">
-          <span>📦</span><span class="hidden md:inline">JSON</span>
+        <button onclick="openDataModal()" class="bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 px-2 py-1.5 rounded-lg flex items-center gap-1 cursor-pointer whitespace-nowrap" title="JSON保存・読込">
+          <span>📦</span>
         </button>
 
-        <button onclick="window.print()" class="bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white px-3 py-1.5 rounded-lg flex items-center gap-1 shadow cursor-pointer whitespace-nowrap">
-          <span>🖨️</span><span id="btn-print-label">A4縦印刷 / PDF</span>
+        <button onclick="downloadDirectLedgerPdf()" class="bg-rose-600 hover:bg-rose-500 active:scale-95 text-white px-2.5 py-1.5 rounded-lg flex items-center gap-1 shadow cursor-pointer whitespace-nowrap" title="印刷ダイアログを使わずにPDFファイルを直接ダウンロードします">
+          <span>📄</span><span>PDF保存</span>
+        </button>
+
+        <button onclick="window.print()" class="bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white px-2.5 py-1.5 rounded-lg flex items-center gap-1 shadow cursor-pointer whitespace-nowrap">
+          <span>🖨️</span><span id="btn-print-label">印刷</span>
         </button>
       </div>
     </div>
@@ -392,7 +426,7 @@
             <option value="white_board">③ ホワイトボード風</option>
             <option value="compact_stamp">④ スリム横帯黒板</option>
           </select>
-          <button onclick="openChalkboardEditor(null)" class="px-1.5 py-0.5 bg-emerald-800 hover:bg-emerald-700 border border-emerald-600 text-white rounded text-[10px] font-extrabold cursor-pointer" title="黒板の線表示・1行目/2行目フリー文言・工種非表示・共通設定を編集します">
+          <button onclick="openChalkboardEditor(null)" class="px-1.5 py-0.5 bg-emerald-800 hover:bg-emerald-700 border border-emerald-600 text-white rounded text-[10px] font-extrabold cursor-pointer" title="黒板の線表示・行別文字色・フリー文言・共通設定を編集します">
             ✏️ 黒板記載設定
           </button>
         </div>
@@ -415,18 +449,60 @@
     <div id="ledger-pages-container" class="max-w-5xl mx-auto"></div>
   </main>
 
-  <!-- ==================== モーダル0：☁️ クラウド同期設定（URL・現場キーは初期空白） ==================== -->
+  <!-- ==================== モーダルD：⏸️ 一時保存（端末保管 ＋ Discord PDF/JSON自動送信） ==================== -->
+  <div id="modal-temp-drafts" class="no-print hidden fixed inset-0 bg-black/80 backdrop-blur-xs z-50 items-center justify-center p-3">
+    <div class="bg-slate-900 border border-amber-600/70 text-white rounded-2xl w-full max-w-xl max-h-[88vh] flex flex-col overflow-hidden shadow-2xl text-xs">
+      <div class="px-4 py-3 bg-amber-950 border-b border-amber-800 flex items-center justify-between shrink-0">
+        <h2 class="font-extrabold text-sm flex items-center gap-1.5">
+          <span>⏸️</span> 一時保存（作業途中の下書き保管 ＋ Discord PDF/JSON自動送信）
+        </h2>
+        <button onclick="closeModal('modal-temp-drafts')" class="text-slate-400 hover:text-white text-lg px-2 cursor-pointer">✕</button>
+      </div>
+
+      <div class="p-3 bg-slate-950 border-b border-slate-800 space-y-2 shrink-0">
+        <div class="text-[11px] text-slate-300 leading-relaxed">
+          「今すぐ一時保存」を押すと端末へ一時保管すると同時に、<strong>現在の台帳PDF（.pdf）と復元用JSON（.json）をDiscordへ自動送信</strong>します（電波圏外・オフライン時は送信待機キューに入り、<strong>通信回復時に自動でDiscordへ送信</strong>されます）。
+        </div>
+        <div class="flex gap-2">
+          <input id="temp-draft-memo-input" type="text" placeholder="一時保存メモ（例：午前分4枚入力済・午後分追加前）"
+                 class="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white outline-none focus:border-amber-400" />
+          <button onclick="saveTempDraftSnapshot()" class="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white font-extrabold rounded-xl shadow cursor-pointer whitespace-nowrap">
+            ⏸️ 今すぐ一時保存
+          </button>
+        </div>
+      </div>
+
+      <div id="temp-drafts-list-body" class="p-3 overflow-y-auto space-y-2 flex-1"></div>
+    </div>
+  </div>
+
+  <!-- ==================== モーダルE：🗑️ 30日削除保管庫（台帳から削除したデータの復元・30日後自動消去） ==================== -->
+  <div id="modal-deleted-archive" class="no-print hidden fixed inset-0 bg-black/80 backdrop-blur-xs z-50 items-center justify-center p-3">
+    <div class="bg-slate-900 border border-rose-700/70 text-white rounded-2xl w-full max-w-xl max-h-[88vh] flex flex-col overflow-hidden shadow-2xl text-xs">
+      <div class="px-4 py-3 bg-rose-950 border-b border-rose-800 flex items-center justify-between shrink-0">
+        <h2 class="font-extrabold text-sm flex items-center gap-1.5">
+          <span>🗑️</span> 削除データ保管庫（30日経過後に自動消去 ／ 削除時Discord送信済）
+        </h2>
+        <button onclick="closeModal('modal-deleted-archive')" class="text-slate-400 hover:text-white text-lg px-2 cursor-pointer">✕</button>
+      </div>
+      <div class="px-4 py-2.5 bg-slate-950 border-b border-slate-800 text-[11px] text-slate-300 leading-relaxed shrink-0">
+        台帳もとで削除された写真枠・台帳データは、削除指示を出した瞬間に<strong>PDF＋JSONをDiscordへ送信</strong>（圏外時は通信回復時に自動送信）したうえで、この端末内保管庫に<strong>30日間</strong>保持されます。30日経過後は自動的に完全消去されます。
+      </div>
+      <div id="deleted-archive-list-body" class="p-3 overflow-y-auto space-y-2 flex-1"></div>
+    </div>
+  </div>
+
+  <!-- ==================== モーダル0：☁️ クラウド同期設定 ＆ サーバー不要写真削除 ==================== -->
   <div id="modal-cloud-sync" class="no-print hidden fixed inset-0 bg-black/80 backdrop-blur-xs z-50 items-center justify-center p-2 sm:p-4">
     <div class="bg-slate-900 border border-cyan-700/70 text-white rounded-2xl w-full max-w-2xl max-h-[92vh] flex flex-col overflow-hidden shadow-2xl text-xs">
       <div class="px-4 py-3 bg-cyan-950 border-b border-cyan-800 flex items-center justify-between shrink-0">
         <h2 class="font-extrabold text-sm flex items-center gap-1.5">
-          <span>☁️</span> クラウド同期設定（ログイン不要・現場キー方式 ／ 野帳システム共通）
+          <span>☁️</span> クラウド同期設定（現場キー方式 ／ サーバー不要写真削除・野帳共有）
         </h2>
         <button onclick="closeModal('modal-cloud-sync')" class="text-slate-400 hover:text-white text-lg px-2 cursor-pointer">✕</button>
       </div>
 
       <div class="p-4 overflow-y-auto space-y-3.5 flex-1">
-        <!-- 1. 保存済み現場のワンタップ切替 -->
         <div class="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
           <div class="flex items-center justify-between">
             <span class="font-extrabold text-cyan-300">1. 端末に保存済みの現場キー切替（複数現場対応）</span>
@@ -440,7 +516,6 @@
           </div>
         </div>
 
-        <!-- 2. 接続URL ＆ 現場キー（初期空白・ローカル保存） -->
         <div class="p-3 rounded-xl bg-slate-800/80 border border-slate-700 space-y-2.5">
           <div class="font-extrabold text-amber-300">2. 同期サーバーURL ＆ 現場キー（端末の localStorage に保存）</div>
 
@@ -476,7 +551,6 @@
           </div>
         </div>
 
-        <!-- 3. 写真台帳データのクラウド同期（Push / Pull） -->
         <div class="p-3 rounded-xl bg-emerald-950/40 border border-emerald-700/70 space-y-2">
           <div class="font-extrabold text-emerald-300">3. 工事写真台帳のクラウド同期（DB ＋ ストレージ）</div>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -489,16 +563,20 @@
           </div>
         </div>
 
-        <!-- 4. 共通写真・豆図プール（野帳システムと共有） -->
         <div class="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
-          <div class="flex items-center justify-between">
-            <span class="font-extrabold text-amber-300">4. 🖼️ 共通写真・豆図プール（野帳システムと共有）</span>
-            <button type="button" onclick="refreshCloudSharedMediaPool()" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-[10px] font-bold text-cyan-300 cursor-pointer">
-              🔄 一覧を更新
-            </button>
+          <div class="flex flex-wrap items-center justify-between gap-1.5">
+            <span class="font-extrabold text-amber-300">4. 🖼️ サーバー上の共通写真・豆図プール（不要データの削除対応）</span>
+            <div class="flex items-center gap-1">
+              <button type="button" onclick="deleteAllUnusedCloudMedia()" class="px-2 py-1 bg-rose-900 hover:bg-rose-700 border border-rose-700 rounded-lg text-[10px] font-extrabold text-rose-100 cursor-pointer" title="現在の台帳で使われていないサーバー上の不要な写真・豆図を一括削除します">
+                🧹 未使用を一括削除
+              </button>
+              <button type="button" onclick="refreshCloudSharedMediaPool()" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-[10px] font-bold text-cyan-300 cursor-pointer">
+                🔄 更新
+              </button>
+            </div>
           </div>
-          <div id="cloud-shared-media-grid" class="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-48 overflow-y-auto p-1">
-            <div class="col-span-full text-center text-slate-400 py-4">同期サーバーURLと現場キーを保存すると、野帳システム等で共有された写真・豆図が表示されます</div>
+          <div id="cloud-shared-media-grid" class="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-56 overflow-y-auto p-1">
+            <div class="col-span-full text-center text-slate-400 py-4">同期サーバーURLと現場キーを保存すると、サーバー上の写真・豆図一覧（使用中/未使用判定＆削除可）が表示されます</div>
           </div>
         </div>
       </div>
@@ -550,36 +628,59 @@
     </div>
   </div>
 
-  <!-- ==================== モーダル3：Discord Webhook送信 ==================== -->
-  <div id="modal-discord" class="no-print hidden fixed inset-0 bg-black/75 backdrop-blur-xs z-50 items-center justify-center p-3">
-    <div class="bg-slate-900 border border-slate-700 text-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl text-xs">
+  <!-- ==================== モーダル3：🚀 Discord PDF送信 ＆ 一時保存モーダル ==================== -->
+  <div id="modal-discord" class="no-print hidden fixed inset-0 bg-black/80 backdrop-blur-xs z-50 items-center justify-center p-3">
+    <div class="bg-slate-900 border border-indigo-700/80 text-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl text-xs">
       <div class="px-4 py-3 bg-indigo-950 border-b border-indigo-800 flex items-center justify-between">
-        <h2 class="font-bold text-sm">🚀 Discord 工事写真台帳サマリー＆JSON送信</h2>
+        <h2 class="font-extrabold text-sm flex items-center gap-1.5">
+          <span>🚀</span> Discord 工事写真台帳 PDF＋JSON送信 ＆ 一時保存
+        </h2>
         <button onclick="closeModal('modal-discord')" class="text-slate-400 hover:text-white text-lg px-2 cursor-pointer">✕</button>
       </div>
       <div class="p-4 space-y-3">
         <div>
-          <label class="block font-bold text-indigo-300 mb-1">Discord Webhook URL（端末内のみ保存）</label>
+          <label class="block font-bold text-indigo-300 mb-1">Discord Webhook URL（端末内のみ保存・一時保存/削除時にも自動利用）</label>
           <input id="ledger-webhook-input" type="url" placeholder="https://discord.com/api/webhooks/..."
                  class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white outline-none focus:border-indigo-400" />
         </div>
         <div>
           <label class="block font-bold text-slate-300 mb-1">送信コメント</label>
-          <input id="ledger-discord-msg" type="text" value="本日の工事写真台帳データを共有します。"
+          <input id="ledger-discord-msg" type="text" value="本日の工事写真台帳（PDF）を共有します。"
                  class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white outline-none focus:border-indigo-400" />
         </div>
-        <div class="text-[10px] text-slate-400">
-          ※現在の台帳一覧テキスト（工種・場所・コメント一覧）と再編集用JSONファイルを送信します。未設定時は何もせずローカル保存のみ行います。
+
+        <div class="p-2.5 rounded-xl bg-slate-800/90 border border-slate-700 space-y-2 font-bold">
+          <div class="text-[11px] text-amber-300">添付ファイル設定：</div>
+          <label class="flex items-center justify-between cursor-pointer text-white">
+            <span>📄 台帳PDFファイル（.pdf）を添付して送信</span>
+            <input id="chk-discord-attach-pdf" type="checkbox" checked class="w-4 h-4 accent-rose-500 cursor-pointer" />
+          </label>
+          <label class="flex items-center justify-between cursor-pointer text-slate-200">
+            <span>📦 再編集用プロジェクトJSON（.json）も添付</span>
+            <input id="chk-discord-attach-json" type="checkbox" checked class="w-4 h-4 accent-sky-500 cursor-pointer" />
+          </label>
         </div>
+
+        <div class="p-2.5 rounded-xl bg-amber-950/40 border border-amber-700/60 text-[10px] text-amber-200 leading-relaxed">
+          💡 <strong>自動送信＆一時保存サポート</strong>：URLを保存しておくと、「⏸️ 一時保存」押下時や「🗑️ 台帳データの削除」指示時にも自動でPDF＋JSONをDiscordへ送信します（電波圏外時は端末内キューに一時保存し、通信回復時に自動送信します）。
+        </div>
+
         <div class="grid grid-cols-2 gap-2">
-          <button onclick="saveWebhookOnly()" class="py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-xl font-bold cursor-pointer">URL保存のみ</button>
-          <button onclick="sendLedgerToDiscord()" class="py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold rounded-xl cursor-pointer">📤 今すぐ送信</button>
+          <button onclick="saveWebhookOnly()" class="py-2 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-xl font-bold cursor-pointer">
+            ⚙️ URL保存のみ
+          </button>
+          <button onclick="saveTempDraftAndCloseDiscordModal()" class="py-2 bg-amber-700 hover:bg-amber-600 text-white rounded-xl font-extrabold cursor-pointer">
+            ⏸️ 一時保存＋自動送信
+          </button>
         </div>
+        <button id="btn-execute-discord-pdf-send" onclick="sendLedgerToDiscord()" class="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold rounded-xl shadow text-sm cursor-pointer">
+          📤 台帳PDF＋JSONを生成してDiscordへ送信
+        </button>
       </div>
     </div>
   </div>
 
-  <!-- ==================== モーダル4：豆図 ＆ 写真直接ベクター編集・野帳出力モーダル ==================== -->
+  <!-- ==================== モーダル4：豆図 ＆ 写真直接ベクター編集・カメラ挿入・野帳出力モーダル ==================== -->
   <div id="modal-mamezu" class="no-print hidden fixed inset-0 bg-black/80 backdrop-blur-xs z-50 items-center justify-center p-2 sm:p-4">
     <div class="bg-slate-900 border border-slate-700 text-white rounded-2xl w-full max-w-3xl max-h-[95vh] flex flex-col overflow-hidden shadow-2xl text-xs">
       <div id="mz-modal-header" class="px-4 py-2.5 bg-emerald-950 border-b border-emerald-800 flex items-center justify-between shrink-0">
@@ -587,7 +688,6 @@
         <button onclick="closeModal('modal-mamezu')" class="text-slate-400 hover:text-white text-lg px-2 cursor-pointer">✕</button>
       </div>
 
-      <!-- 略図ひな型プルダウン（11種） ＆ 画像/SVG読込・野帳出力バー -->
       <div class="px-3 py-2 bg-slate-950 border-b border-slate-800 flex flex-wrap items-center justify-between gap-1.5 shrink-0 text-[11px]">
         <div id="mz-preset-bar" class="flex flex-wrap items-center gap-1.5">
           <span class="text-slate-400 font-bold">略図雛形:</span>
@@ -611,6 +711,10 @@
         </div>
 
         <div class="flex flex-wrap items-center gap-1">
+          <label class="relative overflow-hidden px-2 py-1 bg-teal-600 hover:bg-teal-500 text-white rounded font-bold cursor-pointer" title="カメラで撮影して豆図に挿入">
+            <span>📸 撮影挿入</span>
+            <input type="file" accept="image/*" capture="environment" onchange="loadMamezuBackgroundImage(event)" class="absolute inset-0 opacity-0 cursor-pointer" />
+          </label>
           <label class="relative overflow-hidden px-2 py-1 bg-sky-700 hover:bg-sky-600 text-white rounded font-bold cursor-pointer">
             <span>🖼️ 画像挿入</span>
             <input type="file" accept="image/*" onchange="loadMamezuBackgroundImage(event)" class="absolute inset-0 opacity-0 cursor-pointer" />
@@ -632,7 +736,6 @@
         </div>
       </div>
 
-      <!-- Back（背景） -->
       <div id="mz-bg-bar" class="px-3 py-1.5 bg-slate-900 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2 shrink-0 text-[11px]">
         <div class="flex flex-wrap items-center gap-1">
           <span class="text-amber-300 font-extrabold">Back:</span>
@@ -654,7 +757,6 @@
         </div>
       </div>
 
-      <!-- 野帳共有プールからの豆図ワンクリック読込ドロワー -->
       <div id="mz-cloud-picker-bar" class="hidden px-3 py-2 bg-cyan-950/90 border-b border-cyan-700 space-y-1.5 shrink-0">
         <div class="flex items-center justify-between text-[11px]">
           <span class="font-extrabold text-cyan-200">☁️ 野帳システム等から共有された豆図・画像（クリックでキャンバスに挿入）</span>
@@ -663,7 +765,6 @@
         <div id="mz-cloud-picker-grid" class="grid grid-cols-4 sm:grid-cols-6 gap-2 max-h-28 overflow-y-auto"></div>
       </div>
 
-      <!-- 作図・選択ツールバー -->
       <div class="px-3 py-2 bg-slate-800 border-b border-slate-700 flex flex-wrap items-center justify-between gap-1.5 shrink-0 text-[11px]">
         <div class="flex flex-wrap items-center gap-1">
           <button onclick="setMamezuTool('select')" id="mz-tool-select" class="mz-tool-btn px-2 py-1 rounded bg-slate-700 text-slate-200 font-bold cursor-pointer">👆 選択/移動</button>
@@ -690,7 +791,6 @@
         </div>
       </div>
 
-      <!-- 線種(4種)・矢印始点/終点(各7種)・ハッチング(4種)・引き出し線/文字入力詳細バー -->
       <div class="px-3 py-1.5 bg-slate-900 border-b border-slate-800 flex flex-wrap items-center gap-2 text-[11px] shrink-0">
         <div class="inline-flex items-center gap-1">
           <span class="text-slate-400 font-bold">線種:</span>
@@ -746,13 +846,11 @@
         </div>
       </div>
 
-      <!-- 豆図・写真描画キャンバス -->
       <div class="flex-1 overflow-auto bg-slate-700 p-3 flex items-center justify-center">
         <canvas id="mamezu-canvas" width="480" height="280"
                 class="bg-white rounded shadow-xl border-2 border-slate-400 touch-none cursor-crosshair max-w-full h-auto"></canvas>
       </div>
 
-      <!-- フッター決定ボタン（台帳挿入 ＋ 野帳へクラウド出力） -->
       <div class="px-4 py-2.5 bg-slate-950 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2 shrink-0">
         <button id="mz-btn-remove" onclick="removeMamezuFromPhoto()" class="px-3 py-1.5 bg-rose-950 hover:bg-rose-900 border border-rose-800 text-rose-200 rounded-xl font-bold cursor-pointer">
           豆図を解除（なしにする）
@@ -770,26 +868,24 @@
     </div>
   </div>
 
-  <!-- ==================== モーダル5：電子小黒板 記載内容・縦横線・フリー文言・項目編集モーダル ==================== -->
+  <!-- ==================== モーダル5：電子小黒板 記載内容・行別文字色・縦横線・フリー文言編集モーダル ==================== -->
   <div id="modal-chalkboard" class="no-print hidden fixed inset-0 bg-black/80 backdrop-blur-xs z-50 items-center justify-center p-2 sm:p-4">
     <div class="bg-slate-900 border border-slate-700 text-white rounded-2xl w-full max-w-2xl max-h-[92vh] flex flex-col overflow-hidden shadow-2xl text-xs">
       <div class="px-4 py-2.5 bg-emerald-950 border-b border-emerald-800 flex items-center justify-between shrink-0">
-        <h2 id="cb-modal-title" class="font-extrabold text-sm flex items-center gap-1.5"><span>🟩</span> 電子小黒板 記載内容・線表示・フリー文言編集</h2>
+        <h2 id="cb-modal-title" class="font-extrabold text-sm flex items-center gap-1.5"><span>🟩</span> 電子小黒板 記載内容・行別文字色・線表示編集</h2>
         <button onclick="closeModal('modal-chalkboard')" class="text-slate-400 hover:text-white text-lg px-2 cursor-pointer">✕</button>
       </div>
 
       <div class="p-3 sm:p-4 overflow-y-auto space-y-3 flex-1">
-        <!-- リアルタイムプレビュー -->
         <div class="bg-slate-950 border border-slate-800 rounded-xl p-3 flex flex-col sm:flex-row items-center justify-between gap-3">
           <div class="space-y-1 text-[11px] text-slate-300">
             <div class="font-extrabold text-emerald-300">プレビュー（写真左下に表示される黒板）</div>
-            <div>※横線・縦線の有無や、1行目・2行目のフリー文言、工種の非表示をリアルタイム確認できます。</div>
+            <div>※各行の右横にある色ボタンで、行ごとに好きな文字色（赤・黄・水色・白・黒など）へ変更できます。</div>
           </div>
           <div id="cb-live-preview-box" class="shrink-0"></div>
         </div>
 
-        <!-- セクションA：選択中の写真1枚ごとの黒板記載内容 -->
-        <div id="cb-single-photo-section" class="p-3 rounded-xl bg-slate-800/90 border border-emerald-700/70 space-y-2">
+        <div id="cb-single-photo-section" class="p-3 rounded-xl bg-slate-800/90 border border-emerald-700/70 space-y-2.5">
           <div class="flex items-center justify-between">
             <span id="cb-target-photo-label" class="font-extrabold text-emerald-300">📷 この写真の黒板記載内容</span>
             <label class="inline-flex items-center gap-1 text-[11px] font-bold text-amber-200 cursor-pointer">
@@ -800,7 +896,10 @@
 
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <div>
-              <label class="block text-[10px] text-slate-400 font-bold mb-0.5">黒板タイトル（工事名・件名 ※空欄時は共通名）</label>
+              <div class="flex items-center justify-between mb-0.5">
+                <label class="text-[10px] text-slate-400 font-bold">黒板タイトル（工事名・件名）</label>
+                <div id="cb-picker-titleColor" class="flex items-center gap-1"></div>
+              </div>
               <input id="cb-single-title" type="text" oninput="updateChalkboardPreviewFromModal()" placeholder="例：○○新築工事 1F躯体"
                      class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white font-bold outline-none focus:border-emerald-400" />
             </div>
@@ -816,32 +915,42 @@
             </div>
           </div>
 
-          <!-- 1行目・2行目のフリー文言（工種や測点とは関係ない自由テキスト） -->
-          <div class="p-2 rounded-lg bg-slate-900/90 border border-amber-600/50 space-y-1.5">
-            <div class="text-[10px] font-extrabold text-amber-300">✨ 1行目・2行目 フリー文言入力（工種・測点と無関係な自由文言を入力できます）</div>
+          <div class="p-2 rounded-lg bg-slate-900/90 border border-amber-600/50 space-y-2">
+            <div class="text-[10px] font-extrabold text-amber-300">✨ 1行目・2行目 フリー文言 ＆ 行別文字色（赤・黄・水色・白・黒など）</div>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <div>
-                <label class="block text-[10px] text-slate-400 font-bold mb-0.5">1行目フリー文言</label>
-                <input id="cb-single-line1" type="text" oninput="updateChalkboardPreviewFromModal()" placeholder="例：自主検査確認状況 / 着工前全景"
+                <div class="flex items-center justify-between mb-0.5">
+                  <label class="text-[10px] text-slate-400 font-bold">1行目フリー文言</label>
+                  <div id="cb-picker-line1Color" class="flex items-center gap-1"></div>
+                </div>
+                <input id="cb-single-line1" type="text" oninput="updateChalkboardPreviewFromModal()" placeholder="例：自主検査確認状況 / 注意事項"
                        class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-amber-100 font-bold outline-none focus:border-amber-400" />
               </div>
               <div>
-                <label class="block text-[10px] text-slate-400 font-bold mb-0.5">2行目フリー文言</label>
-                <input id="cb-single-line2" type="text" oninput="updateChalkboardPreviewFromModal()" placeholder="例：設計値・実測値異常なし / 天候：晴れ"
+                <div class="flex items-center justify-between mb-0.5">
+                  <label class="text-[10px] text-slate-400 font-bold">2行目フリー文言</label>
+                  <div id="cb-picker-line2Color" class="flex items-center gap-1"></div>
+                </div>
+                <input id="cb-single-line2" type="text" oninput="updateChalkboardPreviewFromModal()" placeholder="例：設計値・実測値異常なし"
                        class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-amber-100 font-bold outline-none focus:border-amber-400" />
               </div>
             </div>
           </div>
 
-          <!-- 工種・測点・撮影日時 -->
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <div>
-              <label id="cb-single-lbl-work" class="block text-[10px] text-slate-400 font-bold mb-0.5">工種（下の共通設定で非表示可）</label>
+              <div class="flex items-center justify-between mb-0.5">
+                <label id="cb-single-lbl-work" class="text-[10px] text-slate-400 font-bold">工種</label>
+                <div id="cb-picker-workColor" class="flex items-center gap-1"></div>
+              </div>
               <input id="cb-single-work" type="text" oninput="updateChalkboardPreviewFromModal()"
                      class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white font-bold outline-none focus:border-emerald-400" />
             </div>
             <div>
-              <label id="cb-single-lbl-loc" class="block text-[10px] text-slate-400 font-bold mb-0.5">測点・箇所（非表示可）</label>
+              <div class="flex items-center justify-between mb-0.5">
+                <label id="cb-single-lbl-loc" class="text-[10px] text-slate-400 font-bold">測点・箇所</label>
+                <div id="cb-picker-locColor" class="flex items-center gap-1"></div>
+              </div>
               <input id="cb-single-loc" type="text" oninput="updateChalkboardPreviewFromModal()"
                      class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white font-bold outline-none focus:border-emerald-400" />
             </div>
@@ -854,7 +963,10 @@
 
           <div>
             <div class="flex items-center justify-between mb-0.5">
-              <label class="text-[10px] text-slate-400 font-bold">黒板内の複数行フリー記載欄</label>
+              <div class="flex items-center gap-2">
+                <label class="text-[10px] text-slate-400 font-bold">黒板内の複数行フリー記載欄</label>
+                <div id="cb-picker-bodyColor" class="flex items-center gap-1"></div>
+              </div>
               <button type="button" onclick="copyCommentToChalkboardBody()" class="text-[10px] text-sky-300 hover:underline font-bold cursor-pointer">
                 📋 メモ欄の内容をコピー
               </button>
@@ -864,11 +976,9 @@
           </div>
         </div>
 
-        <!-- セクションB：全写真共通の黒板線表示・項目表示ON/OFF・デフォルトフリー文言設定 -->
         <div class="p-3 rounded-xl bg-slate-800/70 border border-slate-700 space-y-2.5">
           <div class="font-extrabold text-amber-300">⚙️ 全写真共通の黒板設定（罫線有無・表示項目のON/OFF・共通フリー文言）</div>
 
-          <!-- 縦線・横線の表示有無オプション -->
           <div class="p-2 rounded-lg bg-slate-950 border border-cyan-800/70 flex flex-wrap items-center gap-4 text-[11px] font-extrabold">
             <span class="text-cyan-300">📏 黒板内の罫線表示:</span>
             <label class="inline-flex items-center gap-1.5 cursor-pointer text-white">
@@ -881,7 +991,6 @@
             </label>
           </div>
 
-          <!-- 表示する行のON/OFF（工種や測点もここで非表示可能） -->
           <div class="flex flex-wrap items-center gap-3 pt-0.5 text-[11px] font-bold text-slate-200">
             <label class="inline-flex items-center gap-1 cursor-pointer">
               <input id="cb-cfg-show-title" type="checkbox" checked onchange="updateChalkboardPreviewFromModal()" class="accent-emerald-500" />
@@ -990,6 +1099,8 @@
     const STORAGE_KEY_LEDGER = 'genba_construction_ledger_v1';
     const STORAGE_KEY_CLOUD_SYNC = 'genba_cloud_sync_config_v1';
     const STORAGE_KEY_MAMEZU_BRIDGE = 'genba_shared_mamezu_bridge_v1';
+    const DELETED_RETENTION_DAYS = 30;
+    const DELETED_RETENTION_MS = DELETED_RETENTION_DAYS * 24 * 60 * 60 * 1000;
 
     // ==================== クラウド同期設定（同期サーバーURL・現場キーは初期空白） ====================
     let cloudSyncConfig = {
@@ -1222,7 +1333,6 @@
       return json.media;
     }
 
-    // 豆図を野帳へ出力（クラウド経由 ＋ 端末内共通ブリッジ保存）
     async function exportMamezuToFieldnote(photoId) {
       const proj = getCurrentProject();
       const photo = proj.photos.find(p => p.id === photoId);
@@ -1233,7 +1343,6 @@
         return;
       }
 
-      // 1. 同一ブラウザ内の野帳システムとも即連携できるようローカルブリッジへも保存
       try {
         const list = JSON.parse(localStorage.getItem(STORAGE_KEY_MAMEZU_BRIDGE) || '[]');
         list.unshift({
@@ -1245,7 +1354,6 @@
         localStorage.setItem(STORAGE_KEY_MAMEZU_BRIDGE, JSON.stringify(list.slice(0, 30)));
       } catch (_) {}
 
-      // 2. クラウド同期設定がある場合はR2＆D1共通プールへ即アップロードして野帳へ共有
       const rawUrl = (cloudSyncConfig.activeUrl || '').trim();
       const siteKey = (cloudSyncConfig.activeSiteKey || '').trim();
       if (!rawUrl || !siteKey) {
@@ -1314,7 +1422,7 @@
             location: p.location || '',
             photo_date: p.date || '',
             comment: p.comment || '',
-            chalkboard_json: p.chalkboard || {}
+            chalkboard_json: Object.assign({}, p.chalkboard || {}, { commentHtml: p.commentHtml || '' })
           });
         }
 
@@ -1384,7 +1492,7 @@
         proj.photos = items.map(it => {
           const phMedia = it.media_id ? mediaMap.get(it.media_id) : null;
           const mzMedia = it.mamezu_media_id ? mediaMap.get(it.mamezu_media_id) : null;
-          let cbObj = { customTitle: '', line1Text: '', line2Text: '', customBody: '', hideOnPhoto: false, customStyle: '' };
+          let cbObj = createEmptyChalkboardObj();
           try {
             if (it.chalkboard_json) {
               cbObj = Object.assign(cbObj, typeof it.chalkboard_json === 'string' ? JSON.parse(it.chalkboard_json) : it.chalkboard_json);
@@ -1400,6 +1508,7 @@
             location: it.location || '',
             date: it.photo_date || '',
             comment: it.comment || '',
+            commentHtml: cbObj.commentHtml || escapeHtml(it.comment || '').replace(/\n/g, '<br>'),
             chalkboard: cbObj,
             imageDataUrl: phMedia?.storage_url || null,
             originalImageDataUrl: phMedia?.storage_url || null,
@@ -1427,13 +1536,86 @@
       }
     }
 
+    let cachedCloudMediaList = [];
+
+    function getUsedCloudMediaIdsSet() {
+      const used = new Set();
+      appState.projects.forEach(pr => {
+        (pr.photos || []).forEach(p => {
+          if (p.cloudMediaId) used.add(p.cloudMediaId);
+          if (p.cloudMamezuMediaId) used.add(p.cloudMamezuMediaId);
+          if (p.imageDataUrl && typeof p.imageDataUrl === 'string') {
+            cachedCloudMediaList.forEach(m => {
+              if (m.storage_url && p.imageDataUrl.includes(m.storage_url)) used.add(m.media_id);
+            });
+          }
+          if (p.mamezuDataUrl && typeof p.mamezuDataUrl === 'string') {
+            cachedCloudMediaList.forEach(m => {
+              if (m.storage_url && p.mamezuDataUrl.includes(m.storage_url)) used.add(m.media_id);
+            });
+          }
+        });
+      });
+      return used;
+    }
+
+    async function deleteCloudMediaIds(mediaIds) {
+      const rawUrl = (cloudSyncConfig.activeUrl || '').trim();
+      const siteKey = (cloudSyncConfig.activeSiteKey || '').trim();
+      if (!rawUrl || !siteKey) {
+        showToast('同期サーバーURLと現場キーが未設定です');
+        return false;
+      }
+      try {
+        showToast(`🗑️ サーバー上の ${mediaIds.length} 件を削除しています...`);
+        const res = await fetch(`${rawUrl}/api/media/delete`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Site-Key': siteKey
+          },
+          body: JSON.stringify({ media_ids: mediaIds })
+        });
+        const data = await res.json();
+        if (!res.ok || !data.ok) {
+          throw new Error(data.error || 'サーバー削除に失敗しました');
+        }
+        await refreshCloudSharedMediaPool();
+        showToast(`✅ サーバー上の ${data.deletedCount} 件を完全削除しました`);
+        return true;
+      } catch (err) {
+        showToast(`❌ 削除エラー: ${err.message}`);
+        return false;
+      }
+    }
+
+    async function deleteSingleCloudMedia(mediaId) {
+      if (!confirm('サーバー（R2ストレージ・DB）からこの画像・豆図を完全に削除しますか？')) return;
+      await deleteCloudMediaIds([mediaId]);
+    }
+
+    async function deleteAllUnusedCloudMedia() {
+      if (!Array.isArray(cachedCloudMediaList) || cachedCloudMediaList.length === 0) {
+        showToast('サーバー上のデータがありません');
+        return;
+      }
+      const usedSet = getUsedCloudMediaIdsSet();
+      const unusedIds = cachedCloudMediaList.filter(m => !usedSet.has(m.media_id)).map(m => m.media_id);
+      if (unusedIds.length === 0) {
+        showToast('未使用のサーバー画像はありません（すべて台帳で使用中です）');
+        return;
+      }
+      if (!confirm(`現在の台帳で使われていないサーバー上の写真・豆図 ${unusedIds.length} 件を一括削除しますか？`)) return;
+      await deleteCloudMediaIds(unusedIds);
+    }
+
     async function refreshCloudSharedMediaPool() {
       const grid = document.getElementById('cloud-shared-media-grid');
       if (!grid) return;
       const rawUrl = (cloudSyncConfig.activeUrl || '').trim();
       const siteKey = (cloudSyncConfig.activeSiteKey || '').trim();
       if (!rawUrl || !siteKey) {
-        grid.innerHTML = `<div class="col-span-full text-center text-slate-400 py-4">同期サーバーURLと現場キーを保存すると、野帳システム等で共有された写真・豆図が表示されます</div>`;
+        grid.innerHTML = `<div class="col-span-full text-center text-slate-400 py-4">同期サーバーURLと現場キーを保存すると、サーバー上の写真・豆図一覧（使用中/未使用判定＆削除可）が表示されます</div>`;
         return;
       }
 
@@ -1443,18 +1625,29 @@
         const data = await res.json();
         if (!res.ok || !data.ok) throw new Error(data.error || '取得失敗');
         const list = data.media || [];
+        cachedCloudMediaList = list;
         if (list.length === 0) {
-          grid.innerHTML = `<div class="col-span-full text-center text-slate-400 py-4">まだ共有写真・豆図はありません</div>`;
+          grid.innerHTML = `<div class="col-span-full text-center text-slate-400 py-4">サーバーに保存されている写真・豆図はありません</div>`;
           return;
         }
+        const usedSet = getUsedCloudMediaIdsSet();
         grid.innerHTML = list.map(m => {
           const isMz = m.media_type === 'mamezu';
+          const isUsed = usedSet.has(m.media_id);
           const proj = getCurrentProject();
           const targetOptions = proj.photos.map((ph, idx) => `<option value="${escapeHtml(ph.id)}">No.${idx + 1} ${escapeHtml((ph.location || '').slice(0, 8))}</option>`).join('');
           return `
-            <div class="bg-slate-900 border border-slate-700 rounded-lg overflow-hidden flex flex-col">
-              <div class="h-20 bg-slate-800 flex items-center justify-center overflow-hidden">
+            <div class="bg-slate-900 border ${isUsed ? 'border-slate-700' : 'border-amber-700/70'} rounded-lg overflow-hidden flex flex-col">
+              <div class="relative h-20 bg-slate-800 flex items-center justify-center overflow-hidden">
                 <img src="${escapeHtml(m.storage_url)}" alt="${escapeHtml(m.media_id)}" class="w-full h-full object-contain" />
+                <span class="absolute top-1 left-1 px-1.5 py-0.2 rounded text-[8px] font-extrabold ${isUsed ? 'bg-emerald-900/90 text-emerald-200' : 'bg-amber-800/95 text-amber-100'}">
+                  ${isUsed ? '使用中' : '未使用'}
+                </span>
+                <button type="button" onclick="deleteSingleCloudMedia('${escapeHtml(m.media_id)}')"
+                        class="absolute top-1 right-1 px-1.5 py-0.5 bg-rose-900/90 hover:bg-rose-600 text-white rounded text-[9px] font-bold cursor-pointer"
+                        title="サーバーからこの画像を削除">
+                  🗑️
+                </button>
               </div>
               <div class="p-1.5 flex flex-col gap-1">
                 <span class="text-[9px] font-bold ${isMz ? 'text-emerald-300' : 'text-sky-300'} truncate">
@@ -1596,7 +1789,7 @@
       t.textContent = msg;
       t.classList.remove('hidden');
       clearTimeout(window.__ledgerToastTimer);
-      window.__ledgerToastTimer = setTimeout(() => t.classList.add('hidden'), 2600);
+      window.__ledgerToastTimer = setTimeout(() => t.classList.add('hidden'), 3000);
     }
 
     function openModal(id) {
@@ -1621,11 +1814,20 @@
         if (this.db) return this.db;
         return new Promise(resolve => {
           try {
-            const req = indexedDB.open('genba_ledger_db_v1', 1);
+            const req = indexedDB.open('genba_ledger_db_v3', 3);
             req.onupgradeneeded = e => {
               const db = e.target.result;
               if (!db.objectStoreNames.contains('store')) {
                 db.createObjectStore('store', { keyPath: 'id' });
+              }
+              if (!db.objectStoreNames.contains('drafts')) {
+                db.createObjectStore('drafts', { keyPath: 'id' });
+              }
+              if (!db.objectStoreNames.contains('outbox')) {
+                db.createObjectStore('outbox', { keyPath: 'id' });
+              }
+              if (!db.objectStoreNames.contains('deleted_archive')) {
+                db.createObjectStore('deleted_archive', { keyPath: 'id' });
               }
             };
             req.onsuccess = e => {
@@ -1665,17 +1867,376 @@
             resolve(null);
           }
         });
+      },
+      async putRecord(storeName, record) {
+        const db = await this.init();
+        if (!db) return false;
+        return new Promise(resolve => {
+          try {
+            const tx = db.transaction(storeName, 'readwrite');
+            tx.objectStore(storeName).put(record);
+            tx.oncomplete = () => resolve(true);
+            tx.onerror = () => resolve(false);
+          } catch (_) {
+            resolve(false);
+          }
+        });
+      },
+      async getRecord(storeName, id) {
+        const db = await this.init();
+        if (!db) return null;
+        return new Promise(resolve => {
+          try {
+            const tx = db.transaction(storeName, 'readonly');
+            const req = tx.objectStore(storeName).get(id);
+            req.onsuccess = () => resolve(req.result || null);
+            req.onerror = () => resolve(null);
+          } catch (_) {
+            resolve(null);
+          }
+        });
+      },
+      async getAllRecords(storeName) {
+        const db = await this.init();
+        if (!db) return [];
+        return new Promise(resolve => {
+          try {
+            const tx = db.transaction(storeName, 'readonly');
+            const req = tx.objectStore(storeName).getAll();
+            req.onsuccess = () => resolve(req.result || []);
+            req.onerror = () => resolve([]);
+          } catch (_) {
+            resolve([]);
+          }
+        });
+      },
+      async deleteRecord(storeName, id) {
+        const db = await this.init();
+        if (!db) return false;
+        return new Promise(resolve => {
+          try {
+            const tx = db.transaction(storeName, 'readwrite');
+            tx.objectStore(storeName).delete(id);
+            tx.oncomplete = () => resolve(true);
+            tx.onerror = () => resolve(false);
+          } catch (_) {
+            resolve(false);
+          }
+        });
       }
     };
 
+    // ==================== 30日削除保管庫（台帳もと削除後の30日保持・自動消去・削除時Discord送信） ====================
+    async function purgeExpiredDeletedArchive() {
+      const now = Date.now();
+      const all = await LedgerDB.getAllRecords('deleted_archive');
+      for (const item of all) {
+        if (item.expiresAt && item.expiresAt <= now) {
+          await LedgerDB.deleteRecord('deleted_archive', item.id);
+        }
+      }
+      await updateDeletedArchiveBadge();
+    }
+
+    async function updateDeletedArchiveBadge() {
+      const btn = document.getElementById('btn-deleted-archive-count');
+      if (!btn) return;
+      const list = await LedgerDB.getAllRecords('deleted_archive');
+      btn.textContent = `🗑️ 30日保管(${list.length})`;
+      btn.classList.toggle('border-rose-600/80', list.length > 0);
+      btn.classList.toggle('text-rose-200', list.length > 0);
+    }
+
+    async function openDeletedArchiveModal() {
+      await purgeExpiredDeletedArchive();
+      await renderDeletedArchiveList();
+      openModal('modal-deleted-archive');
+    }
+
+    async function renderDeletedArchiveList() {
+      const box = document.getElementById('deleted-archive-list-body');
+      if (!box) return;
+      const list = await LedgerDB.getAllRecords('deleted_archive');
+      list.sort((a, b) => (b.deletedAt || 0) - (a.deletedAt || 0));
+
+      if (list.length === 0) {
+        box.innerHTML = `<div class="text-slate-400 text-center py-8">現在、30日保管庫に保存されている削除データはありません</div>`;
+        return;
+      }
+
+      const now = Date.now();
+      box.innerHTML = list.map(item => {
+        const remainDays = Math.max(1, Math.ceil(((item.expiresAt || now) - now) / (24 * 60 * 60 * 1000)));
+        return `
+          <div class="p-3 rounded-xl bg-slate-800 border border-slate-700 space-y-1.5">
+            <div class="flex items-center justify-between gap-2">
+              <div class="font-extrabold text-rose-200 truncate">🗑️ ${escapeHtml(item.title || '削除された写真枠')}</div>
+              <span class="px-2 py-0.5 rounded-full bg-rose-950 border border-rose-700 text-rose-200 text-[10px] font-bold shrink-0">残り約${remainDays}日</span>
+            </div>
+            <div class="text-[10px] text-slate-300">
+              元プロジェクト: ${escapeHtml(item.projectName || '')} ／ 削除日時: ${escapeHtml(item.deletedAtText || '')}
+            </div>
+            <div class="flex items-center gap-1.5 pt-1">
+              <button onclick="restoreFromDeletedArchive('${item.id}')" class="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-extrabold cursor-pointer">
+                ♻️ 台帳へ復元する
+              </button>
+              <button onclick="downloadDeletedArchiveJson('${item.id}')" class="px-2.5 py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-bold cursor-pointer">
+                ↓ JSON保存
+              </button>
+              <button onclick="permanentlyDeleteFromArchive('${item.id}')" class="px-2.5 py-1.5 bg-rose-950 hover:bg-rose-800 text-rose-200 rounded-lg font-bold cursor-pointer">
+                完全消去
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function restoreFromDeletedArchive(archiveId) {
+      const rec = await LedgerDB.getRecord('deleted_archive', archiveId);
+      if (!rec) return;
+
+      if (rec.kind === 'photo' && rec.photoItem) {
+        const proj = getCurrentProject();
+        const restoredPhoto = JSON.parse(JSON.stringify(rec.photoItem));
+        restoredPhoto.id = 'ph_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5);
+        proj.photos.push(restoredPhoto);
+        await LedgerDB.deleteRecord('deleted_archive', archiveId);
+        await persistState(true);
+        await updateDeletedArchiveBadge();
+        await renderDeletedArchiveList();
+        renderAll();
+        showToast('♻️ 削除された写真枠を現在の台帳へ復元しました');
+      } else if (rec.kind === 'project' && rec.projectData) {
+        const restoredProj = JSON.parse(JSON.stringify(rec.projectData));
+        restoredProj.id = 'proj_' + Date.now();
+        appState.projects.push(restoredProj);
+        appState.currentProjectIndex = appState.projects.length - 1;
+        await LedgerDB.deleteRecord('deleted_archive', archiveId);
+        await persistState(true);
+        await updateDeletedArchiveBadge();
+        closeModal('modal-deleted-archive');
+        renderAll();
+        showToast(`♻️ 台帳「${restoredProj.projectName}」を復元しました`);
+      }
+    }
+
+    async function downloadDeletedArchiveJson(archiveId) {
+      const rec = await LedgerDB.getRecord('deleted_archive', archiveId);
+      if (!rec) return;
+      const jsonStr = JSON.stringify(rec.projectData || rec.photoItem || rec, null, 2);
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([jsonStr], { type: 'application/json' }));
+      a.download = `deleted_backup_${Date.now()}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+
+    async function permanentlyDeleteFromArchive(archiveId) {
+      await LedgerDB.deleteRecord('deleted_archive', archiveId);
+      await updateDeletedArchiveBadge();
+      await renderDeletedArchiveList();
+      showToast('保管庫から完全に消去しました');
+    }
+
+    // ==================== 一時保存（端末保管 ＋ DiscordへPDF/JSON送信・通信回復時自動送信） ====================
+    async function updateTempDraftBadge() {
+      const btn = document.getElementById('btn-temp-drafts-count');
+      if (!btn) return;
+      const drafts = await LedgerDB.getAllRecords('drafts');
+      btn.textContent = `保管(${drafts.length}) ▾`;
+    }
+
+    async function saveTempDraftSnapshot() {
+      const proj = getCurrentProject();
+      const memoInp = document.getElementById('temp-draft-memo-input');
+      const note = (memoInp?.value || '').trim() || `${proj.projectName}（${proj.photos.length}枚）`;
+      const now = Date.now();
+      const rec = {
+        id: `draft_${now}_${Math.random().toString(36).slice(2, 5)}`,
+        note,
+        savedAt: now,
+        savedAtText: getTodayDateTimeStr(),
+        projectSnapshot: JSON.parse(JSON.stringify(proj))
+      };
+      await LedgerDB.putRecord('drafts', rec);
+      if (memoInp) memoInp.value = '';
+      await updateTempDraftBadge();
+      if (!document.getElementById('modal-temp-drafts')?.classList.contains('hidden')) {
+        await renderTempDraftsList();
+      }
+
+      const webhookUrl = (appState.discordWebhookUrl || '').trim();
+      if (!webhookUrl) {
+        showToast(`⏸️ 端末へ一時保存しました：「${note}」（Discord URL設定時はPDF＋JSONも自動送信されます）`);
+        return;
+      }
+
+      try {
+        showToast(`⏸️ 一時保存完了。DiscordへPDF＋JSONを送信中...`);
+        const ts = new Date(now).toISOString().replace(/[-:T]/g, '').slice(0, 14);
+        const safeName = String(proj.projectName || 'construction_ledger').replace(/[\\/:*?"<>|\s]+/g, '_').slice(0, 28);
+        const pdfBlob = await generateLedgerPdfBlobForDiscordOrDownload(9.2 * 1024 * 1024);
+        const outboxRecord = {
+          id: `outbox_draft_${now}_${Math.random().toString(36).slice(2, 5)}`,
+          webhookUrl,
+          content: `⏸️ **【一時保存データ】${proj.projectName}**（${proj.photos.length}枚）\nメモ：${note}\n保存日時：${rec.savedAtText}`,
+          pdfBlob,
+          pdfFileName: `draft_${safeName}_${ts}.pdf`,
+          jsonText: JSON.stringify(proj, null, 2),
+          jsonFileName: `draft_${safeName}_${ts}.json`,
+          createdAt: now
+        };
+        await enqueueOrSendLedgerDiscordRecord(outboxRecord, '⏸️ 一時保存のPDF＋JSONをDiscordへ送信しました！', '⏳ オフラインのため一時保存PDF＋JSONを送信待機キューへ保存しました（通信回復時に自動送信）');
+      } catch (err) {
+        showToast(`⏸️ 端末一時保存済（PDF送信エラー: ${err.message}）`);
+      }
+    }
+
+    function saveTempDraftAndCloseDiscordModal() {
+      const url = (document.getElementById('ledger-webhook-input')?.value || '').trim();
+      appState.discordWebhookUrl = url;
+      persistState(true);
+      const msg = (document.getElementById('ledger-discord-msg')?.value || '').trim();
+      const memoInp = document.getElementById('temp-draft-memo-input');
+      if (memoInp && msg) memoInp.value = msg;
+      closeModal('modal-discord');
+      saveTempDraftSnapshot();
+    }
+
+    async function openTempDraftsModal() {
+      await renderTempDraftsList();
+      openModal('modal-temp-drafts');
+    }
+
+    async function renderTempDraftsList() {
+      const box = document.getElementById('temp-drafts-list-body');
+      if (!box) return;
+      const drafts = await LedgerDB.getAllRecords('drafts');
+      drafts.sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
+
+      if (drafts.length === 0) {
+        box.innerHTML = `<div class="text-slate-400 text-center py-8">現在一時保存されている下書きはありません。「⏸️ 今すぐ一時保存」から作業途中の状態を保管・Discord送信できます。</div>`;
+        return;
+      }
+
+      box.innerHTML = drafts.map(d => {
+        const snap = d.projectSnapshot || {};
+        const count = Array.isArray(snap.photos) ? snap.photos.length : 0;
+        return `
+          <div class="p-3 rounded-xl bg-slate-800 border border-slate-700 space-y-1.5">
+            <div class="flex items-center justify-between gap-2">
+              <div class="font-extrabold text-amber-200 truncate">⏸️ ${escapeHtml(d.note || '一時保存データ')}</div>
+              <span class="text-[10px] font-mono text-slate-400 shrink-0">${escapeHtml(d.savedAtText || '')}</span>
+            </div>
+            <div class="text-[10px] text-slate-300">
+              工事名: ${escapeHtml(snap.projectName || '')} ／ 写真枚数: ${count}枚 ／ 用紙: ${PAPER_FORMATS[snap.paperFormat]?.label || 'A4縦'}
+            </div>
+            <div class="flex items-center gap-1.5 pt-1">
+              <button onclick="restoreTempDraft('${d.id}', false)" class="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-extrabold cursor-pointer">
+                ♻️ 現在の台帳へ復元
+              </button>
+              <button onclick="restoreTempDraft('${d.id}', true)" class="px-2.5 py-1.5 bg-sky-700 hover:bg-sky-600 text-white rounded-lg font-bold cursor-pointer">
+                ＋ 別プロジェクトで開く
+              </button>
+              <button onclick="deleteTempDraft('${d.id}')" class="px-2.5 py-1.5 bg-rose-950 hover:bg-rose-800 text-rose-200 rounded-lg font-bold cursor-pointer">
+                削除
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function restoreTempDraft(draftId, asNewProject = false) {
+      const rec = await LedgerDB.getRecord('drafts', draftId);
+      if (!rec || !rec.projectSnapshot) return;
+      const restored = JSON.parse(JSON.stringify(rec.projectSnapshot));
+      if (asNewProject) {
+        restored.id = 'proj_' + Date.now();
+        restored.projectName = `${restored.projectName} (復元)`;
+        appState.projects.push(restored);
+        appState.currentProjectIndex = appState.projects.length - 1;
+      } else {
+        restored.id = getCurrentProject().id;
+        appState.projects[appState.currentProjectIndex] = restored;
+      }
+      await persistState();
+      closeModal('modal-temp-drafts');
+      renderAll();
+      showToast(`♻️ 一時保存データ「${rec.note}」を復元しました`);
+    }
+
+    async function deleteTempDraft(draftId) {
+      await LedgerDB.deleteRecord('drafts', draftId);
+      await updateTempDraftBadge();
+      await renderTempDraftsList();
+      showToast('一時保存データを削除しました');
+    }
+
+    // ==================== リッチテキストメモ（選択した文字だけ色・太字・マーカー変更） ====================
+    function syncRichMemoToState(photoId, editorEl) {
+      const target = getCurrentProject().photos.find(p => p.id === photoId);
+      if (!target || !editorEl) return;
+      target.commentHtml = editorEl.innerHTML;
+      target.comment = editorEl.innerText;
+      persistState();
+    }
+
+    function applyRichMemoFormat(photoId, cmd, value = null) {
+      const editorEl = document.querySelector(`[data-rich-memo="${photoId}"]`);
+      if (!editorEl) return;
+      editorEl.focus();
+
+      const sel = window.getSelection();
+      if (!sel || sel.rangeCount === 0 || !editorEl.contains(sel.anchorNode)) {
+        showToast('色を変えたい文字をなぞって選択してからボタンを押してください');
+        return;
+      }
+      if (sel.isCollapsed) {
+        showToast('色を変えたい文字をドラッグして選択してください');
+        return;
+      }
+
+      document.execCommand('styleWithCSS', false, true);
+      if (cmd === 'foreColor') {
+        document.execCommand('foreColor', false, value);
+      } else if (cmd === 'hiliteColor') {
+        document.execCommand('hiliteColor', false, value);
+      } else if (cmd === 'bold') {
+        document.execCommand('bold', false, null);
+      } else if (cmd === 'removeFormat') {
+        document.execCommand('removeFormat', false, null);
+      }
+      syncRichMemoToState(photoId, editorEl);
+    }
+
+    function buildRichMemoToolbarHtml(photoId) {
+      return `
+        <div class="no-print flex flex-wrap items-center gap-1 mb-1 bg-slate-100 border border-slate-300 rounded px-1.5 py-0.5 text-[10px]">
+          <span class="text-slate-500 font-bold mr-0.5">選択文字色:</span>
+          <button type="button" onmousedown="event.preventDefault(); applyRichMemoFormat('${photoId}', 'foreColor', '#dc2626');" class="w-4 h-4 rounded-full bg-red-600 border border-white shadow-xs cursor-pointer" title="選択文字を赤にする"></button>
+          <button type="button" onmousedown="event.preventDefault(); applyRichMemoFormat('${photoId}', 'foreColor', '#2563eb');" class="w-4 h-4 rounded-full bg-blue-600 border border-white shadow-xs cursor-pointer" title="選択文字を青にする"></button>
+          <button type="button" onmousedown="event.preventDefault(); applyRichMemoFormat('${photoId}', 'foreColor', '#059669');" class="w-4 h-4 rounded-full bg-emerald-600 border border-white shadow-xs cursor-pointer" title="選択文字を緑にする"></button>
+          <button type="button" onmousedown="event.preventDefault(); applyRichMemoFormat('${photoId}', 'foreColor', '#0f172a');" class="w-4 h-4 rounded-full bg-slate-900 border border-white shadow-xs cursor-pointer" title="選択文字を黒にする"></button>
+          <input type="color" value="#dc2626" onchange="applyRichMemoFormat('${photoId}', 'foreColor', this.value);" class="w-4 h-4 p-0 border-0 bg-transparent cursor-pointer" title="好きな色を選択" />
+          <span class="text-slate-300">|</span>
+          <button type="button" onmousedown="event.preventDefault(); applyRichMemoFormat('${photoId}', 'hiliteColor', '#fef08a');" class="px-1.5 py-0.2 bg-yellow-200 border border-yellow-400 text-slate-900 rounded font-bold cursor-pointer" title="黄色マーカー">🖍️黄</button>
+          <button type="button" onmousedown="event.preventDefault(); applyRichMemoFormat('${photoId}', 'bold');" class="px-1.5 py-0.2 bg-white border border-slate-300 text-slate-900 rounded font-black cursor-pointer" title="太字">B</button>
+          <button type="button" onmousedown="event.preventDefault(); applyRichMemoFormat('${photoId}', 'removeFormat');" class="px-1.5 py-0.2 bg-white border border-slate-300 text-slate-600 rounded font-bold cursor-pointer" title="書式クリア">標準</button>
+        </div>
+      `;
+    }
+
     // ==================== 用紙サイズ6種 ＆ 写真台構成15種マスター ====================
     const PAPER_FORMATS = {
-      'A4-portrait':   { label: 'A4縦',     sheetClass: 'a4-ledger-sheet',           printBtn: 'A4縦印刷 / PDF',    pageCss: '@page { size: A4 portrait; margin: 0mm; }',       defaultTpl: '3rows' },
-      'A4-landscape':  { label: 'A4横',     sheetClass: 'a4-landscape-ledger-sheet', printBtn: 'A4横印刷 / PDF',    pageCss: '@page { size: A4 landscape; margin: 0mm; }',      defaultTpl: '2grid_h' },
-      'A3-portrait':   { label: 'A3縦',     sheetClass: 'a3-ledger-sheet',           printBtn: 'A3縦印刷 / PDF',    pageCss: '@page { size: A3 portrait; margin: 0mm; }',       defaultTpl: '4rows' },
-      'A3-landscape':  { label: 'A3横',     sheetClass: 'a3-landscape-ledger-sheet', printBtn: 'A3横印刷 / PDF',    pageCss: '@page { size: A3 landscape; margin: 0mm; }',      defaultTpl: '4grid_h' },
-      'yaecho-single': { label: '野帳1頁',  sheetClass: 'yaecho-single-ledger-sheet',printBtn: '野帳1頁印刷 / PDF', pageCss: '@page { size: 91mm 165mm; margin: 0mm; }',        defaultTpl: 'yaecho_single_card' },
-      'yaecho-spread': { label: '野帳見開', sheetClass: 'yaecho-spread-ledger-sheet',printBtn: '野帳見開印刷 / PDF',pageCss: '@page { size: 182mm 165mm; margin: 0mm; }',       defaultTpl: 'yaecho_spread' }
+      'A4-portrait':   { label: 'A4縦',     mmW: 210, mmH: 297, sheetClass: 'a4-ledger-sheet',           printBtn: '印刷', pageCss: '@page { size: A4 portrait; margin: 0mm; }',       defaultTpl: '3rows' },
+      'A4-landscape':  { label: 'A4横',     mmW: 297, mmH: 210, sheetClass: 'a4-landscape-ledger-sheet', printBtn: '印刷', pageCss: '@page { size: A4 landscape; margin: 0mm; }',      defaultTpl: '2grid_h' },
+      'A3-portrait':   { label: 'A3縦',     mmW: 297, mmH: 420, sheetClass: 'a3-ledger-sheet',           printBtn: '印刷', pageCss: '@page { size: A3 portrait; margin: 0mm; }',       defaultTpl: '4rows' },
+      'A3-landscape':  { label: 'A3横',     mmW: 420, mmH: 297, sheetClass: 'a3-landscape-ledger-sheet', printBtn: '印刷', pageCss: '@page { size: A3 landscape; margin: 0mm; }',      defaultTpl: '4grid_h' },
+      'yaecho-single': { label: '野帳1頁',  mmW: 91,  mmH: 165, sheetClass: 'yaecho-single-ledger-sheet',printBtn: '印刷', pageCss: '@page { size: 91mm 165mm; margin: 0mm; }',        defaultTpl: 'yaecho_single_card' },
+      'yaecho-spread': { label: '野帳見開', mmW: 182, mmH: 165, sheetClass: 'yaecho-spread-ledger-sheet',printBtn: '印刷', pageCss: '@page { size: 182mm 165mm; margin: 0mm; }',       defaultTpl: 'yaecho_spread' }
     };
 
     const TEMPLATE_ORDER = [
@@ -1706,6 +2267,23 @@
         case 'yaecho_spread_x2': return 2;
         default: return 3;
       }
+    }
+
+    function createEmptyChalkboardObj() {
+      return {
+        customTitle: '',
+        titleColor: '',
+        line1Text: '',
+        line1Color: '',
+        line2Text: '',
+        line2Color: '',
+        workColor: '',
+        locColor: '',
+        customBody: '',
+        bodyColor: '',
+        hideOnPhoto: false,
+        customStyle: ''
+      };
     }
 
     function createDefaultChalkboardConfig() {
@@ -1764,7 +2342,12 @@
             location: '1F EVホール開口部',
             date: nowStr,
             comment: 'EV開口部周囲の仮設手すりおよび巾木の設置状況を確認。',
-            chalkboard: { customTitle: '', line1Text: '', line2Text: '', customBody: '手すり高 H=1,100\n巾木 H=150 確認', hideOnPhoto: false, customStyle: '' },
+            commentHtml: 'EV開口部周囲の<span style="color: rgb(220, 38, 38); font-weight: bold;">仮設手すりおよび巾木</span>の設置状況を確認。',
+            chalkboard: Object.assign(createEmptyChalkboardObj(), {
+              line1Text: '自主安全パトロール',
+              line1Color: '#fde047',
+              customBody: '手すり高 H=1,100\n巾木 H=150 確認'
+            }),
             imageDataUrl: null,
             originalImageDataUrl: null,
             photoEditState: null,
@@ -1781,7 +2364,10 @@
             location: '1F X3-Y1通り 地中梁',
             date: nowStr,
             comment: '主筋径・あばら筋ピッチおよびかぶり厚（40mm以上）が設計図通りであることを確認。',
-            chalkboard: { customTitle: '', line1Text: '', line2Text: '', customBody: '主筋 D19 / 帯筋 D10@150\nかぶり厚 実測45mm', hideOnPhoto: false, customStyle: '' },
+            commentHtml: '主筋径・あばら筋ピッチおよび<span style="color: rgb(37, 99, 235); font-weight: bold;">かぶり厚（40mm以上）</span>が設計図通りであることを確認。',
+            chalkboard: Object.assign(createEmptyChalkboardObj(), {
+              customBody: '主筋 D19 / 帯筋 D10@150\nかぶり厚 実測45mm'
+            }),
             imageDataUrl: null,
             originalImageDataUrl: null,
             photoEditState: null,
@@ -1798,7 +2384,8 @@
             location: '南側 資材搬入・仮設通路',
             date: nowStr,
             comment: '親綱・カラーコーン・立入禁止表示の設置完了状況を記録。',
-            chalkboard: { customTitle: '', line1Text: '', line2Text: '', customBody: '', hideOnPhoto: false, customStyle: '' },
+            commentHtml: '親綱・カラーコーン・立入禁止表示の設置完了状況を記録。',
+            chalkboard: createEmptyChalkboardObj(),
             imageDataUrl: null,
             originalImageDataUrl: null,
             photoEditState: null,
@@ -1827,6 +2414,14 @@
         proj.chalkboardConfig = Object.assign(createDefaultChalkboardConfig(), proj.chalkboardConfig);
       }
       if (!proj.templateByPaper) proj.templateByPaper = {};
+      if (Array.isArray(proj.photos)) {
+        proj.photos.forEach(ph => {
+          if (!ph.chalkboard) ph.chalkboard = createEmptyChalkboardObj();
+          if (typeof ph.commentHtml !== 'string') {
+            ph.commentHtml = escapeHtml(ph.comment || '').replace(/\n/g, '<br>');
+          }
+        });
+      }
       return proj;
     }
 
@@ -1835,7 +2430,7 @@
       const st = document.getElementById('autosave-status');
       if (chk) chk.checked = appState.autoSave !== false;
       if (st) {
-        st.textContent = appState.autoSave !== false ? '● 自動保存: ON' : '○ 自動保存: OFF';
+        st.textContent = appState.autoSave !== false ? '● 自動保存' : '○ 自動OFF';
         st.className = appState.autoSave !== false
           ? 'text-emerald-300 font-bold whitespace-nowrap'
           : 'text-amber-300 font-bold whitespace-nowrap';
@@ -1856,7 +2451,7 @@
         persistState();
         showToast('自動保存をONにしました');
       } else {
-        showToast('自動保存をOFFにしました（保存時は「💾 保存」を押してください）');
+        showToast('自動保存をOFFにしました（一時保存または「💾 保存」で保管できます）');
       }
     }
 
@@ -1876,6 +2471,589 @@
     async function manualSaveNow() {
       await persistState(true);
       showToast('💾 現在の台帳状態を端末へ保存しました');
+    }
+
+    // ==================== 台帳PDF 直接生成エンジン（任意のプロジェクト対応） ====================
+    function loadImageElementSafe(src) {
+      return new Promise(resolve => {
+        if (!src) return resolve(null);
+        const im = new Image();
+        im.crossOrigin = 'anonymous';
+        im.onload = () => resolve(im);
+        im.onerror = () => resolve(null);
+        im.src = src;
+      });
+    }
+
+    function parseRichHtmlRuns(htmlStr, plainFallback) {
+      const div = document.createElement('div');
+      if (htmlStr) {
+        div.innerHTML = htmlStr;
+      } else {
+        div.textContent = plainFallback || '';
+      }
+
+      const lines = [[]];
+      function pushNewline() {
+        lines.push([]);
+      }
+
+      function walk(node, style) {
+        if (node.nodeType === Node.TEXT_NODE) {
+          const parts = (node.nodeValue || '').split('\n');
+          parts.forEach((part, i) => {
+            if (i > 0) pushNewline();
+            if (part) {
+              lines[lines.length - 1].push({
+                text: part,
+                color: style.color,
+                bg: style.bg,
+                bold: style.bold
+              });
+            }
+          });
+          return;
+        }
+        if (node.nodeType !== Node.ELEMENT_NODE) return;
+
+        const tag = node.tagName.toUpperCase();
+        if (tag === 'BR') {
+          pushNewline();
+          return;
+        }
+
+        const isBlock = ['DIV', 'P', 'LI'].includes(tag);
+        if (isBlock && lines[lines.length - 1].length > 0) {
+          pushNewline();
+        }
+
+        const nextStyle = { ...style };
+        if (tag === 'B' || tag === 'STRONG') nextStyle.bold = true;
+        if (node.style) {
+          if (node.style.color) nextStyle.color = node.style.color;
+          if (node.style.backgroundColor && node.style.backgroundColor !== 'transparent') {
+            nextStyle.bg = node.style.backgroundColor;
+          }
+          if (node.style.fontWeight === 'bold' || parseInt(node.style.fontWeight, 10) >= 600) {
+            nextStyle.bold = true;
+          }
+        }
+        if (tag === 'FONT' && node.getAttribute('color')) {
+          nextStyle.color = node.getAttribute('color');
+        }
+
+        node.childNodes.forEach(child => walk(child, nextStyle));
+
+        if (isBlock) {
+          pushNewline();
+        }
+      }
+
+      walk(div, { color: '#0f172a', bg: '', bold: false });
+      while (lines.length > 1 && lines[lines.length - 1].length === 0) {
+        lines.pop();
+      }
+      return lines;
+    }
+
+    function drawRichCommentRunsOnCanvas(ctx, item, x, y, maxW, maxLines, lineH = 15, fontSize = 11) {
+      const rawLines = parseRichHtmlRuns(item.commentHtml, item.comment);
+      const wrappedLines = [];
+
+      for (const runs of rawLines) {
+        if (runs.length === 0) {
+          wrappedLines.push([]);
+          continue;
+        }
+        let curLine = [];
+        let curW = 0;
+        for (const run of runs) {
+          ctx.font = `${run.bold ? 'bold ' : ''}${fontSize}px sans-serif`;
+          let buf = '';
+          for (const ch of run.text) {
+            const cw = ctx.measureText(ch).width;
+            if (curW + cw > maxW && (curLine.length > 0 || buf !== '')) {
+              if (buf) curLine.push({ ...run, text: buf });
+              wrappedLines.push(curLine);
+              curLine = [];
+              curW = 0;
+              buf = ch;
+              curW = cw;
+            } else {
+              buf += ch;
+              curW += cw;
+            }
+          }
+          if (buf) curLine.push({ ...run, text: buf });
+        }
+        if (curLine.length > 0) wrappedLines.push(curLine);
+      }
+
+      wrappedLines.slice(0, maxLines).forEach((lineRuns, lIdx) => {
+        let drawX = x;
+        const baseY = y + lIdx * lineH;
+        for (const run of lineRuns) {
+          ctx.font = `${run.bold ? 'bold ' : ''}${fontSize}px sans-serif`;
+          const w = ctx.measureText(run.text).width;
+          if (run.bg) {
+            ctx.fillStyle = run.bg;
+            ctx.fillRect(drawX, baseY - fontSize + 1, w, fontSize + 3);
+          }
+          ctx.fillStyle = run.color || '#0f172a';
+          ctx.fillText(run.text, drawX, baseY);
+          drawX += w;
+        }
+      });
+    }
+
+    function drawChalkboardOnCanvas(ctx, photo, proj, boxX, boxY, boxW, boxH) {
+      if (proj.showMiniChalkboard === false) return;
+      const cb = photo.chalkboard || {};
+      if (cb.hideOnPhoto) return;
+
+      const cfg = proj.chalkboardConfig || createDefaultChalkboardConfig();
+      const styleId = cb.customStyle || proj.chalkboardStyle || 'green_classic';
+      const titleText = (cb.customTitle || '').trim() || (cfg.titleOverride || '').trim() || proj.projectName || '工事写真記録';
+      const contractorText = (cfg.contractorOverride || '').trim() || proj.contractor || '';
+      const line1Val = (cb.line1Text || '').trim() || (cfg.defaultLine1 || '').trim();
+      const line2Val = (cb.line2Text || '').trim() || (cfg.defaultLine2 || '').trim();
+      const bodyText = (cb.customBody || '').trim() || (cfg.defaultBody || '').trim();
+      const showHLines = cfg.showHorizontalLines !== false;
+      const showVLines = cfg.showVerticalLines !== false;
+
+      let bgCol = '#14532d', borderCol = '#b45309', defaultTextCol = '#f8fafc', lineCol = 'rgba(248,250,252,0.4)';
+      if (styleId === 'dark_slate') {
+        bgCol = '#1e293b'; borderCol = '#94a3b8'; defaultTextCol = '#ffffff'; lineCol = 'rgba(255,255,255,0.4)';
+      } else if (styleId === 'white_board') {
+        bgCol = 'rgba(255,255,255,0.96)'; borderCol = '#1d4ed8'; defaultTextCol = '#0f172a'; lineCol = 'rgba(15,23,42,0.35)';
+      } else if (styleId === 'compact_stamp') {
+        bgCol = 'rgba(6,78,59,0.92)'; borderCol = '#fbbf24'; defaultTextCol = '#ffffff'; lineCol = 'rgba(255,255,255,0.45)';
+      }
+
+      if (styleId === 'compact_stamp') {
+        const cbW = boxW - 12;
+        const cbH = 22;
+        const cbX = boxX + 6;
+        const cbY = boxY + boxH - cbH - 6;
+        ctx.fillStyle = bgCol;
+        ctx.fillRect(cbX, cbY, cbW, cbH);
+        ctx.strokeStyle = borderCol;
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(cbX, cbY, cbW, cbH);
+
+        const parts = [];
+        if (cfg.showTitle !== false && titleText) parts.push({ text: titleText, color: cb.titleColor || defaultTextCol });
+        if (cfg.showLine1 !== false && line1Val) parts.push({ text: line1Val, color: cb.line1Color || defaultTextCol });
+        if (cfg.showLine2 !== false && line2Val) parts.push({ text: line2Val, color: cb.line2Color || defaultTextCol });
+        if (cfg.showWork !== false && photo.workType) parts.push({ text: photo.workType, color: cb.workColor || defaultTextCol });
+        if (cfg.showLoc !== false && photo.location) parts.push({ text: photo.location, color: cb.locColor || defaultTextCol });
+
+        let curX = cbX + 6;
+        ctx.font = 'bold 10px sans-serif';
+        parts.forEach((pt, idx) => {
+          const seg = (idx > 0 ? ' | ' : '') + pt.text;
+          ctx.fillStyle = pt.color;
+          ctx.fillText(seg, curX, cbY + 15);
+          curX += ctx.measureText(seg).width;
+        });
+
+        if (cfg.showDate !== false && photo.date) {
+          ctx.fillStyle = defaultTextCol;
+          ctx.textAlign = 'right';
+          ctx.fillText(photo.date, cbX + cbW - 6, cbY + 15);
+          ctx.textAlign = 'left';
+        }
+        return;
+      }
+
+      const rows = [];
+      if (cfg.showTitle !== false) rows.push({ kind: 'title', text: titleText, color: cb.titleColor || defaultTextCol });
+      if (cfg.showLine1 !== false && line1Val) rows.push({ kind: 'kv', lbl: cfg.line1Label || '', val: line1Val, color: cb.line1Color || defaultTextCol });
+      if (cfg.showLine2 !== false && line2Val) rows.push({ kind: 'kv', lbl: cfg.line2Label || '', val: line2Val, color: cb.line2Color || defaultTextCol });
+      if (cfg.showWork !== false) rows.push({ kind: 'kv', lbl: cfg.workLabel || '工種', val: photo.workType || '-', color: cb.workColor || defaultTextCol });
+      if (cfg.showLoc !== false) rows.push({ kind: 'kv', lbl: cfg.locLabel || '測点', val: photo.location || '-', color: cb.locColor || defaultTextCol });
+      if (cfg.showBody !== false && bodyText) {
+        bodyText.split('\n').slice(0, 3).forEach(ln => rows.push({ kind: 'body', text: ln, color: cb.bodyColor || defaultTextCol }));
+      }
+      if (cfg.showContractor || cfg.showDate !== false) {
+        rows.push({ kind: 'footer', left: cfg.showContractor ? contractorText : '', right: cfg.showDate !== false ? (photo.date || '') : '', color: defaultTextCol });
+      }
+      if (rows.length === 0) return;
+
+      const rowH = 16;
+      const cbW = Math.min(Math.max(165, boxW * 0.64), boxW - 12);
+      const cbH = rows.length * rowH + 8;
+      const cbX = boxX + 6;
+      const cbY = boxY + boxH - cbH - 6;
+
+      ctx.fillStyle = bgCol;
+      ctx.fillRect(cbX, cbY, cbW, cbH);
+      ctx.strokeStyle = borderCol;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(cbX, cbY, cbW, cbH);
+
+      rows.forEach((r, idx) => {
+        const ry = cbY + 4 + idx * rowH;
+        if (showHLines && idx < rows.length - 1) {
+          ctx.strokeStyle = lineCol;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(cbX + 3, ry + rowH);
+          ctx.lineTo(cbX + cbW - 3, ry + rowH);
+          ctx.stroke();
+        }
+        if (r.kind === 'title') {
+          ctx.fillStyle = r.color;
+          ctx.font = 'bold 10px sans-serif';
+          ctx.fillText(r.text.slice(0, 22), cbX + 6, ry + 12);
+        } else if (r.kind === 'kv') {
+          ctx.font = 'bold 9.5px sans-serif';
+          if (r.lbl) {
+            ctx.fillStyle = defaultTextCol;
+            ctx.fillText(r.lbl.slice(0, 5), cbX + 6, ry + 12);
+            const splitX = cbX + 36;
+            if (showVLines) {
+              ctx.strokeStyle = lineCol;
+              ctx.beginPath();
+              ctx.moveTo(splitX, ry + 1);
+              ctx.lineTo(splitX, ry + rowH - 1);
+              ctx.stroke();
+            }
+            ctx.fillStyle = r.color;
+            ctx.fillText(r.val.slice(0, 18), splitX + 5, ry + 12);
+          } else {
+            ctx.fillStyle = r.color;
+            ctx.fillText(r.val.slice(0, 23), cbX + 6, ry + 12);
+          }
+        } else if (r.kind === 'body') {
+          ctx.fillStyle = r.color;
+          ctx.font = '9px sans-serif';
+          ctx.fillText(r.text.slice(0, 24), cbX + 6, ry + 12);
+        } else if (r.kind === 'footer') {
+          ctx.fillStyle = r.color;
+          ctx.font = '8.5px sans-serif';
+          if (r.left) ctx.fillText(r.left.slice(0, 12), cbX + 6, ry + 12);
+          if (r.right) {
+            ctx.textAlign = 'right';
+            ctx.fillText(r.right, cbX + cbW - 6, ry + 12);
+            ctx.textAlign = 'left';
+          }
+        }
+      });
+    }
+
+    async function renderLedgerPagesToCanvases(targetProj = null, ignoreFilter = false) {
+      const proj = targetProj || getCurrentProject();
+      const paperInfo = PAPER_FORMATS[proj.paperFormat] || PAPER_FORMATS['A4-portrait'];
+      const tpl = proj.templateType || paperInfo.defaultTpl;
+      const perPage = getItemsPerPage(proj.paperFormat, tpl);
+      const pxPerMm = 3.8;
+      const cw = Math.round(paperInfo.mmW * pxPerMm);
+      const ch = Math.round(paperInfo.mmH * pxPerMm);
+
+      const filtered = (proj.photos || []).filter(p => {
+        if (ignoreFilter) return true;
+        if (sourceFilter === 'pin') return p.sourceType === 'pin';
+        if (sourceFilter === 'standalone') return p.sourceType !== 'pin';
+        return true;
+      });
+
+      const chunks = [];
+      for (let i = 0; i < filtered.length; i += perPage) {
+        chunks.push(filtered.slice(i, i + perPage));
+      }
+      if (chunks.length === 0) chunks.push([]);
+
+      const isYaechoPaper = proj.paperFormat.startsWith('yaecho');
+      const padL = (isYaechoPaper ? 18 : 42) + (proj.bindingMargin === 'left' ? 68 : 0);
+      const padT = (isYaechoPaper ? 18 : 40) + (proj.bindingMargin === 'top' ? 68 : 0);
+      const padR = isYaechoPaper ? 18 : 42;
+      const padB = isYaechoPaper ? 18 : 40;
+
+      const canvases = [];
+      for (let pageIdx = 0; pageIdx < chunks.length; pageIdx++) {
+        const pageItems = chunks[pageIdx];
+        const canvas = document.createElement('canvas');
+        canvas.width = cw;
+        canvas.height = ch;
+        canvas.__mmW = paperInfo.mmW;
+        canvas.__mmH = paperInfo.mmH;
+        const ctx = canvas.getContext('2d');
+
+        ctx.fillStyle = isYaechoPaper ? '#fffef7' : '#ffffff';
+        ctx.fillRect(0, 0, cw, ch);
+
+        if (isYaechoPaper) {
+          ctx.strokeStyle = 'rgba(16, 185, 129, 0.22)';
+          ctx.lineWidth = 1;
+          for (let gx = 0; gx <= cw; gx += 16) { ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, ch); ctx.stroke(); }
+          for (let gy = 0; gy <= ch; gy += 16) { ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(cw, gy); ctx.stroke(); }
+        }
+
+        let curY = padT;
+        if (isYaechoPaper) {
+          ctx.fillStyle = '#064e3b';
+          ctx.font = 'bold 12px sans-serif';
+          ctx.fillText(proj.projectName || '工事写真野帳', padL, curY + 12);
+          ctx.textAlign = 'right';
+          ctx.fillText(`P.${pageIdx + 1}/${chunks.length}`, cw - padR, curY + 12);
+          ctx.textAlign = 'left';
+          ctx.strokeStyle = '#047857';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath(); ctx.moveTo(padL, curY + 18); ctx.lineTo(cw - padR, curY + 18); ctx.stroke();
+          curY += 24;
+        } else {
+          ctx.fillStyle = '#0f172a';
+          ctx.font = 'bold 18px sans-serif';
+          ctx.fillText(proj.projectName || '工事写真台帳', padL, curY + 18);
+          ctx.fillStyle = '#475569';
+          ctx.font = 'bold 11px sans-serif';
+          ctx.fillText(`工区・件名：${proj.subtitle || ''}   施工者：${proj.contractor || ''}`, padL, curY + 35);
+          ctx.textAlign = 'right';
+          ctx.fillText(`Page ${pageIdx + 1} / ${chunks.length}`, cw - padR, curY + 35);
+          ctx.textAlign = 'left';
+          ctx.strokeStyle = '#1e293b';
+          ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.moveTo(padL, curY + 42); ctx.lineTo(cw - padR, curY + 42); ctx.stroke();
+          curY += 52;
+        }
+
+        const areaW = cw - padL - padR;
+        const areaH = ch - curY - padB;
+        const isGrid = ['6grid', 'before_after', '4grid', '4grid_h', 'photo_only_4', 'photo_only_8'].includes(tpl);
+        const isPhotoOnly = tpl.startsWith('photo_only') || tpl === 'yaecho_single_photo_only';
+
+        const cols = isGrid
+          ? ((tpl === '6grid' && proj.paperFormat.startsWith('A3')) ? 3 : ((tpl === 'photo_only_8' && proj.paperFormat.endsWith('landscape')) ? 4 : 2))
+          : 1;
+        const rowsCount = Math.max(1, Math.ceil(perPage / cols));
+        const gap = 10;
+        const cardW = (areaW - gap * (cols - 1)) / cols;
+        const cardH = (areaH - gap * (rowsCount - 1)) / rowsCount;
+
+        for (let idx = 0; idx < pageItems.length; idx++) {
+          const item = pageItems[idx];
+          const globalIdx = proj.photos.findIndex(x => x.id === item.id);
+          const rIdx = Math.floor(idx / cols);
+          const cIdx = idx % cols;
+          const x = padL + cIdx * (cardW + gap);
+          const y = curY + rIdx * (cardH + gap);
+
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(x, y, cardW, cardH);
+          ctx.strokeStyle = '#64748b';
+          ctx.lineWidth = 1.2;
+          ctx.strokeRect(x, y, cardW, cardH);
+
+          const phImg = await loadImageElementSafe(item.imageDataUrl);
+          const mzImg = await loadImageElementSafe(item.mamezuDataUrl);
+
+          if (isPhotoOnly) {
+            const pX = x + 6, pY = y + 6, pW = cardW - 12, pH = cardH - 12;
+            ctx.fillStyle = '#0f172a';
+            ctx.fillRect(pX, pY, pW, pH);
+            if (phImg) {
+              const sc = Math.min(pW / phImg.width, pH / phImg.height);
+              ctx.drawImage(phImg, pX + (pW - phImg.width * sc) / 2, pY + (pH - phImg.height * sc) / 2, phImg.width * sc, phImg.height * sc);
+            }
+            drawChalkboardOnCanvas(ctx, item, proj, pX, pY, pW, pH);
+          } else if (isGrid) {
+            const pX = x + 6, pY = y + 6, pW = cardW - 12, pH = cardH * 0.56;
+            ctx.fillStyle = '#0f172a';
+            ctx.fillRect(pX, pY, pW, pH);
+            if (phImg) {
+              const sc = Math.min(pW / phImg.width, pH / phImg.height);
+              ctx.drawImage(phImg, pX + (pW - phImg.width * sc) / 2, pY + (pH - phImg.height * sc) / 2, phImg.width * sc, phImg.height * sc);
+            }
+            drawChalkboardOnCanvas(ctx, item, proj, pX, pY, pW, pH);
+
+            let tY = pY + pH + 14;
+            ctx.fillStyle = '#0f172a';
+            ctx.font = 'bold 10.5px sans-serif';
+            ctx.fillText(`No.${globalIdx + 1} [${item.workType || '-'}] ${item.location || ''}`, pX, tY);
+            tY += 6;
+            if (mzImg) {
+              const mzH = Math.min(54, cardH * 0.18);
+              ctx.drawImage(mzImg, pX, tY, Math.min(pW, mzH * 1.7), mzH);
+              tY += mzH + 12;
+            } else {
+              tY += 10;
+            }
+            drawRichCommentRunsOnCanvas(ctx, item, pX, tY, pW - 4, 3, 13, 10);
+          } else {
+            const halfW = cardW / 2;
+            const pX = x + 8, pY = y + 8, pW = halfW - 16, pH = cardH - 16;
+            ctx.fillStyle = '#0f172a';
+            ctx.fillRect(pX, pY, pW, pH);
+            if (phImg) {
+              const sc = Math.min(pW / phImg.width, pH / phImg.height);
+              ctx.drawImage(phImg, pX + (pW - phImg.width * sc) / 2, pY + (pH - phImg.height * sc) / 2, phImg.width * sc, phImg.height * sc);
+            } else {
+              ctx.fillStyle = '#94a3b8';
+              ctx.font = 'bold 12px sans-serif';
+              ctx.textAlign = 'center';
+              ctx.fillText(`写真-${String(globalIdx + 1).padStart(3, '0')}`, pX + pW / 2, pY + pH / 2);
+              ctx.textAlign = 'left';
+            }
+            drawChalkboardOnCanvas(ctx, item, proj, pX, pY, pW, pH);
+
+            ctx.strokeStyle = '#94a3b8';
+            ctx.beginPath(); ctx.moveTo(x + halfW, y); ctx.lineTo(x + halfW, y + cardH); ctx.stroke();
+
+            const rX = x + halfW + 10;
+            const rW = halfW - 20;
+            let rY = y + 18;
+            ctx.fillStyle = '#0f172a';
+            ctx.font = 'bold 11px sans-serif';
+            ctx.fillText(`No.${globalIdx + 1}  工種：${item.workType || '-'}`, rX, rY);
+            rY += 15;
+            ctx.fillText(`測点・箇所：${item.location || '-'}`, rX, rY);
+            rY += 14;
+            ctx.fillStyle = '#475569';
+            ctx.font = '10px sans-serif';
+            ctx.fillText(`撮影日時：${item.date || '-'}`, rX, rY);
+            rY += 6;
+            ctx.strokeStyle = '#cbd5e1';
+            ctx.beginPath(); ctx.moveTo(rX, rY); ctx.lineTo(rX + rW, rY); ctx.stroke();
+            rY += 8;
+
+            if (mzImg) {
+              const mzH = Math.min(82, cardH * 0.34);
+              const mzW = Math.min(rW, mzH * 1.71);
+              ctx.strokeStyle = '#10b981';
+              ctx.strokeRect(rX, rY, mzW, mzH);
+              ctx.drawImage(mzImg, rX, rY, mzW, mzH);
+              rY += mzH + 14;
+            } else {
+              rY += 8;
+            }
+
+            const maxLines = Math.max(2, Math.floor((y + cardH - rY - 6) / 15));
+            drawRichCommentRunsOnCanvas(ctx, item, rX, rY, rW, maxLines, 15, 11);
+          }
+        }
+
+        canvases.push(canvas);
+      }
+
+      return canvases;
+    }
+
+    function buildPdfBlobFromCanvases(canvasList, jpegQuality = 0.88) {
+      const enc = new TextEncoder();
+      const chunks = [];
+      let offset = 0;
+      const offsets = [0];
+
+      function pushStr(str) {
+        const bytes = enc.encode(str);
+        chunks.push(bytes);
+        offset += bytes.length;
+      }
+      function pushBytes(u8) {
+        chunks.push(u8);
+        offset += u8.length;
+      }
+      function beginObj() {
+        const num = offsets.length;
+        offsets.push(offset);
+        pushStr(`${num} 0 obj\n`);
+        return num;
+      }
+      function endObj() {
+        pushStr('\nendobj\n');
+      }
+
+      pushStr('%PDF-1.4\n');
+      pushBytes(new Uint8Array([0x25, 0xE2, 0xE3, 0xCF, 0xD3, 0x0A]));
+
+      const pageCount = canvasList.length;
+      const pagesObjNum = pageCount * 3 + 1;
+      const catalogObjNum = pageCount * 3 + 2;
+      const pageObjNums = [];
+      const mmPerPt = 2.83464567;
+
+      for (let i = 0; i < pageCount; i++) {
+        const c = canvasList[i];
+        const jpegDataUrl = c.toDataURL('image/jpeg', jpegQuality);
+        const base64 = jpegDataUrl.split(',')[1];
+        const binStr = atob(base64);
+        const jpegBytes = new Uint8Array(binStr.length);
+        for (let b = 0; b < binStr.length; b++) jpegBytes[b] = binStr.charCodeAt(b);
+
+        const mmW = c.__mmW || 210;
+        const mmH = c.__mmH || 297;
+        const ptW = (mmW * mmPerPt).toFixed(2);
+        const ptH = (mmH * mmPerPt).toFixed(2);
+
+        const imgObjNum = beginObj();
+        pushStr(`<< /Type /XObject /Subtype /Image /Width ${c.width} /Height ${c.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpegBytes.length} >>\nstream\n`);
+        pushBytes(jpegBytes);
+        pushStr('\nendstream');
+        endObj();
+
+        const streamBody = `q ${ptW} 0 0 ${ptH} 0 0 cm /Im1 Do Q`;
+        const contObjNum = beginObj();
+        pushStr(`<< /Length ${streamBody.length} >>\nstream\n${streamBody}\nendstream`);
+        endObj();
+
+        const pageObjNum = beginObj();
+        pageObjNums.push(pageObjNum);
+        pushStr(`<< /Type /Page /Parent ${pagesObjNum} 0 R /MediaBox [0 0 ${ptW} ${ptH}] /Resources << /XObject << /Im1 ${imgObjNum} 0 R >> >> /Contents ${contObjNum} 0 R >>`);
+        endObj();
+      }
+
+      beginObj();
+      pushStr(`<< /Type /Pages /Kids [${pageObjNums.map(n => `${n} 0 R`).join(' ')}] /Count ${pageCount} >>`);
+      endObj();
+
+      beginObj();
+      pushStr(`<< /Type /Catalog /Pages ${pagesObjNum} 0 R >>`);
+      endObj();
+
+      const xrefOffset = offset;
+      pushStr(`xref\n0 ${offsets.length}\n`);
+      pushStr('0000000000 65535 f \n');
+      for (let i = 1; i < offsets.length; i++) {
+        pushStr(`${String(offsets[i]).padStart(10, '0')} 00000 n \n`);
+      }
+      pushStr(`trailer\n<< /Size ${offsets.length} /Root ${catalogObjNum} 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`);
+
+      const totalBytes = new Uint8Array(offset);
+      let pos = 0;
+      for (const ch of chunks) {
+        totalBytes.set(ch, pos);
+        pos += ch.length;
+      }
+      return new Blob([totalBytes], { type: 'application/pdf' });
+    }
+
+    async function generateLedgerPdfBlobForDiscordOrDownload(maxBytesForDiscord = 0, targetProj = null, ignoreFilter = false) {
+      const canvases = await renderLedgerPagesToCanvases(targetProj, ignoreFilter);
+      let blob = buildPdfBlobFromCanvases(canvases, 0.88);
+      if (maxBytesForDiscord > 0 && blob.size > maxBytesForDiscord) {
+        blob = buildPdfBlobFromCanvases(canvases, 0.68);
+      }
+      if (maxBytesForDiscord > 0 && blob.size > maxBytesForDiscord) {
+        blob = buildPdfBlobFromCanvases(canvases, 0.48);
+      }
+      return blob;
+    }
+
+    async function downloadDirectLedgerPdf() {
+      const proj = getCurrentProject();
+      showToast('📄 台帳PDFファイルを生成しています...');
+      const pdfBlob = await generateLedgerPdfBlobForDiscordOrDownload(0);
+      const safeName = String(proj.projectName || 'construction_ledger').replace(/[\\/:*?"<>|\s]+/g, '_').slice(0, 32);
+      const url = URL.createObjectURL(pdfBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${safeName}_${Date.now()}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      showToast('✅ 台帳PDFファイルを直接ダウンロードしました');
     }
 
     // ==================== プロジェクト切替モーダル ====================
@@ -1924,14 +3102,49 @@
       renderAll();
     }
 
-    function deleteProject(idx) {
+    async function deleteProject(idx) {
       if (appState.projects.length <= 1) return;
-      if (!confirm('この台帳プロジェクトを削除しますか？')) return;
+      if (!confirm('この台帳プロジェクトを削除しますか？（30日間削除保管庫に保持され、Discord設定時は通知されます）')) return;
+      const targetProj = JSON.parse(JSON.stringify(appState.projects[idx]));
+      const now = Date.now();
+      await LedgerDB.putRecord('deleted_archive', {
+        id: `del_proj_${now}_${Math.random().toString(36).slice(2, 5)}`,
+        kind: 'project',
+        title: `台帳全体: ${targetProj.projectName}（${targetProj.photos.length}枚）`,
+        projectName: targetProj.projectName,
+        deletedAt: now,
+        deletedAtText: getTodayDateTimeStr(),
+        expiresAt: now + DELETED_RETENTION_MS,
+        projectData: targetProj
+      });
+      await updateDeletedArchiveBadge();
+
       appState.projects.splice(idx, 1);
       appState.currentProjectIndex = Math.max(0, Math.min(appState.currentProjectIndex, appState.projects.length - 1));
-      persistState();
+      await persistState(true);
       renderProjectList();
       renderAll();
+
+      const webhookUrl = (appState.discordWebhookUrl || '').trim();
+      if (webhookUrl) {
+        try {
+          const ts = new Date(now).toISOString().replace(/[-:T]/g, '').slice(0, 14);
+          const safeName = String(targetProj.projectName || 'deleted_ledger').replace(/[\\/:*?"<>|\s]+/g, '_').slice(0, 28);
+          const pdfBlob = await generateLedgerPdfBlobForDiscordOrDownload(9.2 * 1024 * 1024, targetProj, true);
+          await enqueueOrSendLedgerDiscordRecord({
+            id: `outbox_delproj_${now}`,
+            webhookUrl,
+            content: `🗑️ **【削除データ記録（台帳全体）】${targetProj.projectName}**（${targetProj.photos.length}枚）が削除されました（30日間保管庫保持）`,
+            pdfBlob,
+            pdfFileName: `deleted_${safeName}_${ts}.pdf`,
+            jsonText: JSON.stringify(targetProj, null, 2),
+            jsonFileName: `deleted_${safeName}_${ts}.json`,
+            createdAt: now
+          }, '🗑️ 削除された台帳のPDF＋JSONをDiscordへ送信しました', '⏳ 削除された台帳のPDF＋JSONを送信待機キューへ保存しました');
+        } catch (_) {}
+      } else {
+        showToast('🗑️ 30日削除保管庫へ移動しました');
+      }
     }
 
     // ==================== 用紙サイズ・構成・各種表示切替 ====================
@@ -2016,7 +3229,7 @@
       renderLedgerPages();
     }
 
-    // ==================== 写真アイテム操作 ＆ 一括圧縮読込 ====================
+    // ==================== 写真アイテム操作・カメラ直接撮影・一括圧縮読込・削除時Discord送信 ====================
     function compressImageFile(file) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -2057,7 +3270,8 @@
         location: opts.location || '',
         date: opts.date || getTodayDateTimeStr(),
         comment: opts.comment || '',
-        chalkboard: { customTitle: '', line1Text: '', line2Text: '', customBody: '', hideOnPhoto: false, customStyle: '' },
+        commentHtml: escapeHtml(opts.comment || '').replace(/\n/g, '<br>'),
+        chalkboard: createEmptyChalkboardObj(),
         imageDataUrl: opts.imageDataUrl || null,
         originalImageDataUrl: opts.imageDataUrl || null,
         photoEditState: null,
@@ -2072,6 +3286,29 @@
         showToast('新しい写真枠を追加しました');
       }
       return item;
+    }
+
+    async function handleCameraCaptureUpload(event) {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      showToast('📸 カメラ撮影写真を取り込んでいます...');
+      try {
+        const dataUrl = await compressImageFile(file);
+        addPhotoItem({
+          sourceType: 'standalone',
+          pinLabel: '📸 カメラ撮影',
+          date: getTodayDateTimeStr(),
+          location: '現場撮影箇所',
+          imageDataUrl: dataUrl,
+          silent: true
+        });
+        await persistState();
+        renderAll();
+        showToast('✅ カメラ撮影した写真を台帳へ追加しました！');
+      } catch (_) {
+        showToast('カメラ写真の読み込みに失敗しました');
+      }
+      event.target.value = '';
     }
 
     async function handleBatchImageUpload(event) {
@@ -2134,12 +3371,61 @@
       renderLedgerPages();
     }
 
-    function deletePhotoItem(photoId) {
+    async function deletePhotoItem(photoId) {
       const proj = getCurrentProject();
-      proj.photos = proj.photos.filter(p => p.id !== photoId);
-      persistState();
+      const idx = proj.photos.findIndex(p => p.id === photoId);
+      if (idx < 0) return;
+
+      const deletedPhoto = JSON.parse(JSON.stringify(proj.photos[idx]));
+      const now = Date.now();
+      const titleStr = `No.${idx + 1} [${deletedPhoto.workType || '工種未設定'}] ${deletedPhoto.location || '測点未設定'}`;
+
+      // 1. 30日削除保管庫へ保存
+      await LedgerDB.putRecord('deleted_archive', {
+        id: `del_ph_${now}_${Math.random().toString(36).slice(2, 5)}`,
+        kind: 'photo',
+        title: titleStr,
+        projectName: proj.projectName,
+        deletedAt: now,
+        deletedAtText: getTodayDateTimeStr(),
+        expiresAt: now + DELETED_RETENTION_MS,
+        photoItem: deletedPhoto
+      });
+      await updateDeletedArchiveBadge();
+
+      // 2. 台帳本体から削除して再描画
+      proj.photos.splice(idx, 1);
+      await persistState();
       renderAll();
-      showToast('写真枠を削除しました');
+
+      // 3. 削除指示を出した段階でDiscordへPDF＋JSONを送信（圏外時は通信回復時に自動送信）
+      const webhookUrl = (appState.discordWebhookUrl || '').trim();
+      if (webhookUrl) {
+        try {
+          const singleMiniProj = Object.assign({}, JSON.parse(JSON.stringify(proj)), {
+            projectName: `【削除データ】${proj.projectName}`,
+            photos: [deletedPhoto]
+          });
+          const ts = new Date(now).toISOString().replace(/[-:T]/g, '').slice(0, 14);
+          const safeTitle = String(deletedPhoto.location || deletedPhoto.workType || `photo_${idx + 1}`).replace(/[\\/:*?"<>|\s]+/g, '_').slice(0, 24);
+          const pdfBlob = await generateLedgerPdfBlobForDiscordOrDownload(9.2 * 1024 * 1024, singleMiniProj, true);
+
+          await enqueueOrSendLedgerDiscordRecord({
+            id: `outbox_del_${now}_${Math.random().toString(36).slice(2, 5)}`,
+            webhookUrl,
+            content: `🗑️ **【台帳削除データ自動送信】${proj.projectName}**\n削除対象：${titleStr}\n※端末の30日削除保管庫へ移動しました（30日後に自動消去）`,
+            pdfBlob,
+            pdfFileName: `deleted_${safeTitle}_${ts}.pdf`,
+            jsonText: JSON.stringify(singleMiniProj, null, 2),
+            jsonFileName: `deleted_${safeTitle}_${ts}.json`,
+            createdAt: now
+          }, '🗑️ 削除データを30日保管庫へ移し、PDF＋JSONをDiscordへ送信しました', '🗑️ 削除データを30日保管庫へ移し、Discord送信キューへ保存しました（通信回復時に自動送信）');
+        } catch (_) {
+          showToast('🗑️ 削除データを30日保管庫へ移動しました');
+        }
+      } else {
+        showToast('🗑️ 削除データを30日保管庫へ移動しました（30日経過後に自動消去）');
+      }
     }
 
     function updatePhotoField(photoId, field, value) {
@@ -2149,8 +3435,52 @@
       persistState();
     }
 
-    // ==================== 電子小黒板オーバーレイ（縦横線オプション ＆ 1行目/2行目フリー文言 ＆ 工種非表示対応） ====================
+    // ==================== 電子小黒板オーバーレイ（行別文字色・縦横線・1/2行目フリー文言対応） ====================
     let editingChalkboardPhotoId = null;
+    let cbDraftColors = {
+      titleColor: '',
+      line1Color: '',
+      line2Color: '',
+      workColor: '',
+      locColor: '',
+      bodyColor: ''
+    };
+
+    const CB_QUICK_COLORS = [
+      { val: '',        label: '標準', bg: 'linear-gradient(135deg,#fff 50%,#0f172a 50%)' },
+      { val: '#ffffff', label: '白',   bg: '#ffffff' },
+      { val: '#fde047', label: '黄',   bg: '#fde047' },
+      { val: '#f87171', label: '赤',   bg: '#ef4444' },
+      { val: '#38bdf8', label: '水色', bg: '#38bdf8' },
+      { val: '#0f172a', label: '黒',   bg: '#0f172a' }
+    ];
+
+    function renderChalkboardColorPickers() {
+      Object.keys(cbDraftColors).forEach(key => {
+        const container = document.getElementById(`cb-picker-${key}`);
+        if (!container) return;
+        const cur = cbDraftColors[key] || '';
+        container.innerHTML = CB_QUICK_COLORS.map(c => {
+          const active = cur.toLowerCase() === c.val.toLowerCase();
+          return `
+            <button type="button"
+                    onclick="setCbDraftColor('${key}', '${c.val}')"
+                    style="background:${c.bg};"
+                    class="w-3.5 h-3.5 rounded-full border ${active ? 'border-emerald-400 ring-2 ring-emerald-400 scale-110' : 'border-slate-500'} cursor-pointer"
+                    title="文字色: ${c.label}"></button>
+          `;
+        }).join('') + `
+          <input type="color" value="${cur || '#fde047'}" oninput="setCbDraftColor('${key}', this.value)"
+                 class="w-4 h-4 p-0 border-0 bg-transparent cursor-pointer" title="好きな文字色を選択" />
+        `;
+      });
+    }
+
+    function setCbDraftColor(key, val) {
+      cbDraftColors[key] = val;
+      renderChalkboardColorPickers();
+      updateChalkboardPreviewFromModal();
+    }
 
     function buildChalkboardOverlayHtml(photo, proj, interactive = true) {
       if (proj.showMiniChalkboard === false) return '';
@@ -2170,62 +3500,62 @@
       const showVLines = cfg.showVerticalLines !== false;
 
       const hLineCls = showHLines ? 'border-b border-current/40' : '';
-      const hTopLineCls = showHLines ? 'border-t border-current/40' : '';
       const vLineCls = showVLines ? 'border-r border-current/40 pr-1.5 mr-1.5' : 'mr-1';
 
       const clickAttr = interactive
-        ? `onclick="event.stopPropagation(); openChalkboardEditor('${photo.id}');" title="クリックして黒板の記載内容・罫線・フリー文言を編集"`
+        ? `onclick="event.stopPropagation(); openChalkboardEditor('${photo.id}');" title="クリックして黒板の記載内容・行別文字色・罫線を編集"`
         : '';
 
       if (styleId === 'compact_stamp') {
         const parts = [];
-        if (cfg.showTitle !== false && titleText) parts.push(titleText);
-        if (cfg.showLine1 !== false && line1Val) parts.push(line1Val);
-        if (cfg.showLine2 !== false && line2Val) parts.push(line2Val);
-        if (cfg.showWork !== false && photo.workType) parts.push(photo.workType);
-        if (cfg.showLoc !== false && photo.location) parts.push(photo.location);
+        if (cfg.showTitle !== false && titleText) parts.push(`<span style="${cb.titleColor ? `color:${cb.titleColor};` : ''}">${escapeHtml(titleText)}</span>`);
+        if (cfg.showLine1 !== false && line1Val) parts.push(`<span style="${cb.line1Color ? `color:${cb.line1Color};` : ''}">${escapeHtml(line1Val)}</span>`);
+        if (cfg.showLine2 !== false && line2Val) parts.push(`<span style="${cb.line2Color ? `color:${cb.line2Color};` : ''}">${escapeHtml(line2Val)}</span>`);
+        if (cfg.showWork !== false && photo.workType) parts.push(`<span style="${cb.workColor ? `color:${cb.workColor};` : ''}">${escapeHtml(photo.workType)}</span>`);
+        if (cfg.showLoc !== false && photo.location) parts.push(`<span style="${cb.locColor ? `color:${cb.locColor};` : ''}">${escapeHtml(photo.location)}</span>`);
         return `
           <div ${clickAttr} class="chalkboard-${styleId} absolute bottom-1.5 left-1.5 right-1.5 px-2 py-0.5 rounded text-[9px] font-bold flex items-center justify-between gap-2 shadow cursor-pointer z-20">
-            <span class="truncate">${escapeHtml(parts.join(' ｜ ') || '工事写真記録')}</span>
+            <span class="truncate">${parts.join(' ｜ ') || '工事写真記録'}</span>
             ${cfg.showDate !== false ? `<span class="font-mono shrink-0 ${showVLines ? 'border-l border-current/40 pl-1.5' : ''}">${escapeHtml(photo.date || '')}</span>` : ''}
           </div>
         `;
       }
 
-      const renderKeyValRow = (lbl, val, isBoldVal = true) => {
+      const renderKeyValRow = (lbl, val, textColor = '') => {
         const cleanLbl = (lbl || '').trim();
+        const colCss = textColor ? `color:${textColor};` : '';
         if (!cleanLbl) {
-          return `<div class="${hLineCls} py-0.5 truncate ${isBoldVal ? 'font-bold' : ''}">${escapeHtml(val)}</div>`;
+          return `<div style="${colCss}" class="${hLineCls} py-0.5 truncate font-bold">${escapeHtml(val)}</div>`;
         }
         return `
           <div class="${hLineCls} py-0.5 flex items-stretch">
             <span class="opacity-85 shrink-0 ${vLineCls}">${escapeHtml(cleanLbl)}</span>
-            <span class="truncate flex-1 ${isBoldVal ? 'font-bold' : ''}">${escapeHtml(val)}</span>
+            <span style="${colCss}" class="truncate flex-1 font-bold">${escapeHtml(val)}</span>
           </div>
         `;
       };
 
       const rowsHtml = [];
       if (cfg.showLine1 !== false && line1Val) {
-        rowsHtml.push(renderKeyValRow(cfg.line1Label, line1Val, true));
+        rowsHtml.push(renderKeyValRow(cfg.line1Label, line1Val, cb.line1Color));
       }
       if (cfg.showLine2 !== false && line2Val) {
-        rowsHtml.push(renderKeyValRow(cfg.line2Label, line2Val, true));
+        rowsHtml.push(renderKeyValRow(cfg.line2Label, line2Val, cb.line2Color));
       }
       if (cfg.showWork !== false) {
-        rowsHtml.push(renderKeyValRow(cfg.workLabel || '工種', photo.workType || '-', true));
+        rowsHtml.push(renderKeyValRow(cfg.workLabel || '工種', photo.workType || '-', cb.workColor));
       }
       if (cfg.showLoc !== false) {
-        rowsHtml.push(renderKeyValRow(cfg.locLabel || '測点', photo.location || '-', true));
+        rowsHtml.push(renderKeyValRow(cfg.locLabel || '測点', photo.location || '-', cb.locColor));
       }
 
       return `
         <div ${clickAttr} class="chalkboard-${styleId} absolute bottom-1.5 left-1.5 max-w-[68%] min-w-[138px] rounded px-2 py-1 text-[9px] leading-tight shadow-md cursor-pointer z-20 select-none">
-          ${cfg.showTitle !== false ? `<div class="font-extrabold ${hLineCls} pb-0.5 mb-0.5 truncate">${escapeHtml(titleText)}</div>` : ''}
+          ${cfg.showTitle !== false ? `<div style="${cb.titleColor ? `color:${cb.titleColor};` : ''}" class="font-extrabold ${hLineCls} pb-0.5 mb-0.5 truncate">${escapeHtml(titleText)}</div>` : ''}
           ${rowsHtml.join('')}
-          ${cfg.showBody !== false && bodyText ? `<div class="py-0.5 ${hLineCls} whitespace-pre-wrap break-words text-[8.5px]">${escapeHtml(bodyText)}</div>` : ''}
+          ${cfg.showBody !== false && bodyText ? `<div style="${cb.bodyColor ? `color:${cb.bodyColor};` : ''}" class="py-0.5 ${hLineCls} whitespace-pre-wrap break-words text-[8.5px] font-bold">${escapeHtml(bodyText)}</div>` : ''}
           ${(cfg.showContractor || cfg.showDate !== false) ? `
-            <div class="pt-0.5 ${!showHLines ? '' : ''} flex items-center justify-between gap-1 text-[8px] opacity-90">
+            <div class="pt-0.5 flex items-center justify-between gap-1 text-[8px] opacity-90">
               ${cfg.showContractor ? `<span class="truncate ${showVLines && cfg.showDate !== false ? 'border-r border-current/40 pr-1.5' : ''}">${escapeHtml(contractorText)}</span>` : '<span></span>'}
               ${cfg.showDate !== false ? `<span class="font-mono shrink-0">${escapeHtml(photo.date || '')}</span>` : ''}
             </div>
@@ -2246,7 +3576,15 @@
         singleSec.classList.remove('hidden');
         const idx = proj.photos.findIndex(p => p.id === photo.id);
         const cb = photo.chalkboard || {};
-        document.getElementById('cb-target-photo-label').textContent = `📷 No.${idx + 1} の黒板記載内容`;
+        cbDraftColors = {
+          titleColor: cb.titleColor || '',
+          line1Color: cb.line1Color || '',
+          line2Color: cb.line2Color || '',
+          workColor: cb.workColor || '',
+          locColor: cb.locColor || '',
+          bodyColor: cb.bodyColor || ''
+        };
+        document.getElementById('cb-target-photo-label').textContent = `📷 No.${idx + 1} の黒板記載内容・行別文字色`;
         document.getElementById('cb-single-hide').checked = !!cb.hideOnPhoto;
         document.getElementById('cb-single-title').value = cb.customTitle || '';
         document.getElementById('cb-single-style').value = cb.customStyle || '';
@@ -2256,11 +3594,14 @@
         document.getElementById('cb-single-loc').value = photo.location || '';
         document.getElementById('cb-single-date').value = photo.date || '';
         document.getElementById('cb-single-body').value = cb.customBody || '';
-        document.getElementById('cb-single-lbl-work').textContent = `${cfg.workLabel || '工種'}（非表示可）`;
-        document.getElementById('cb-single-lbl-loc').textContent = `${cfg.locLabel || '測点'}（非表示可）`;
+        document.getElementById('cb-single-lbl-work').textContent = `${cfg.workLabel || '工種'}`;
+        document.getElementById('cb-single-lbl-loc').textContent = `${cfg.locLabel || '測点'}`;
       } else if (singleSec) {
         singleSec.classList.add('hidden');
+        cbDraftColors = { titleColor: '', line1Color: '', line2Color: '', workColor: '', locColor: '', bodyColor: '' };
       }
+
+      renderChalkboardColorPickers();
 
       document.getElementById('cb-cfg-show-hlines').checked = cfg.showHorizontalLines !== false;
       document.getElementById('cb-cfg-show-vlines').checked = cfg.showVerticalLines !== false;
@@ -2330,9 +3671,15 @@
         date: basePhoto ? document.getElementById('cb-single-date').value : getTodayDateTimeStr(),
         chalkboard: {
           customTitle: basePhoto ? document.getElementById('cb-single-title').value : '',
+          titleColor: cbDraftColors.titleColor,
           line1Text: basePhoto ? document.getElementById('cb-single-line1').value : '自主検査状況記録',
+          line1Color: cbDraftColors.line1Color,
           line2Text: basePhoto ? document.getElementById('cb-single-line2').value : '',
+          line2Color: cbDraftColors.line2Color,
+          workColor: cbDraftColors.workColor,
+          locColor: cbDraftColors.locColor,
           customBody: basePhoto ? document.getElementById('cb-single-body').value : '',
+          bodyColor: cbDraftColors.bodyColor,
           hideOnPhoto: basePhoto ? document.getElementById('cb-single-hide').checked : false,
           customStyle: basePhoto ? document.getElementById('cb-single-style').value : ''
         }
@@ -2384,9 +3731,15 @@
           photo.date = document.getElementById('cb-single-date').value;
           photo.chalkboard = {
             customTitle: document.getElementById('cb-single-title').value,
+            titleColor: cbDraftColors.titleColor,
             line1Text: document.getElementById('cb-single-line1').value,
+            line1Color: cbDraftColors.line1Color,
             line2Text: document.getElementById('cb-single-line2').value,
+            line2Color: cbDraftColors.line2Color,
+            workColor: cbDraftColors.workColor,
+            locColor: cbDraftColors.locColor,
             customBody: document.getElementById('cb-single-body').value,
+            bodyColor: cbDraftColors.bodyColor,
             hideOnPhoto: document.getElementById('cb-single-hide').checked,
             customStyle: document.getElementById('cb-single-style').value
           };
@@ -2396,7 +3749,7 @@
       persistState();
       closeModal('modal-chalkboard');
       renderLedgerPages();
-      showToast('電子小黒板の記載内容を反映しました');
+      showToast('電子小黒板の記載内容・行別文字色を反映しました');
     }
 
     // ==================== 豆図 ＆ 写真直接ベクター編集エンジン ====================
@@ -3096,7 +4449,7 @@
       }
     }
 
-    // ==================== 台帳ページレンダリング（豆図アイコン＆豆図を文章テキストの上に配置） ====================
+    // ==================== 台帳ページレンダリング（カメラ撮影ボタン・リッチテキスト色分け・豆図上配置） ====================
     function buildPhotoMediaBoxHtml(photo, globalIdx, proj, heightClass = 'h-48') {
       const rot = photo.rotation || 0;
       const imgHtml = photo.imageDataUrl
@@ -3104,7 +4457,7 @@
         : `<div class="w-full h-full flex flex-col items-center justify-center text-slate-400 p-2 text-center">
              <span class="text-2xl">📷</span>
              <span class="text-[10px] font-bold mt-1">写真-${String(globalIdx + 1).padStart(3, '0')}</span>
-             <span class="text-[9px] mt-0.5">下の「📁 読込」から画像選択</span>
+             <span class="text-[9px] mt-0.5">下の「📸 撮影」または「📁 読込」から画像挿入</span>
            </div>`;
 
       const cbHtml = buildChalkboardOverlayHtml(photo, proj, true);
@@ -3120,28 +4473,30 @@
             </span>
           </div>
 
-          <!-- 写真操作ボタンバー（印刷時は非表示） -->
           <div class="no-print flex flex-wrap items-center justify-between gap-1 text-[10px]">
             <div class="flex flex-wrap items-center gap-1">
-              <label class="px-1.5 py-0.5 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded font-bold text-slate-800 cursor-pointer">
-                📁 読込
-                <input type="file" accept="image/*" onchange="replaceSinglePhoto('${photo.id}', event)" class="hidden" />
+              <label class="relative overflow-hidden px-1.5 py-0.5 bg-teal-600 hover:bg-teal-500 border border-teal-700 rounded font-bold text-white cursor-pointer" title="カメラで撮影してこの写真枠に入れる">
+                <span>📸 撮影</span>
+                <input type="file" accept="image/*" capture="environment" onchange="replaceSinglePhoto('${photo.id}', event)" class="absolute inset-0 opacity-0 cursor-pointer" />
+              </label>
+              <label class="relative overflow-hidden px-1.5 py-0.5 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded font-bold text-slate-800 cursor-pointer">
+                <span>📁 読込</span>
+                <input type="file" accept="image/*" onchange="replaceSinglePhoto('${photo.id}', event)" class="absolute inset-0 opacity-0 cursor-pointer" />
               </label>
               <button onclick="rotatePhotoItem('${photo.id}')" class="px-1.5 py-0.5 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded font-bold text-slate-700 cursor-pointer" title="90度回転">🔄</button>
               <button onclick="openMamezuEditor('${photo.id}', 'photo')" class="px-1.5 py-0.5 bg-amber-50 hover:bg-amber-100 border border-amber-300 rounded font-bold text-amber-900 cursor-pointer" title="写真の上に直接注釈や矢印を描き込む">✏️ 写真編集</button>
-              <button onclick="openChalkboardEditor('${photo.id}')" class="px-1.5 py-0.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded font-bold text-emerald-900 cursor-pointer" title="黒板の記載内容・フリー文言を編集">🟩 黒板</button>
+              <button onclick="openChalkboardEditor('${photo.id}')" class="px-1.5 py-0.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded font-bold text-emerald-900 cursor-pointer" title="黒板の記載内容・行別文字色を編集">🟩 黒板</button>
             </div>
             <div class="flex items-center gap-0.5">
               <button onclick="movePhotoItem('${photo.id}', -1)" class="px-1 py-0.5 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded text-slate-700 cursor-pointer" title="上へ">↑</button>
               <button onclick="movePhotoItem('${photo.id}', 1)" class="px-1 py-0.5 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded text-slate-700 cursor-pointer" title="下へ">↓</button>
-              <button onclick="deletePhotoItem('${photo.id}')" class="px-1.5 py-0.5 bg-rose-50 hover:bg-rose-100 border border-rose-300 rounded font-bold text-rose-700 cursor-pointer" title="削除">🗑️</button>
+              <button onclick="deletePhotoItem('${photo.id}')" class="px-1.5 py-0.5 bg-rose-50 hover:bg-rose-100 border border-rose-300 rounded font-bold text-rose-700 cursor-pointer" title="削除（30日保管庫へ移動＆Discord送信）">🗑️</button>
             </div>
           </div>
         </div>
       `;
     }
 
-    // 文章テキストの「上」に配置する豆図アイコンバー ＆ 豆図プレビュー（＋ 野帳へ出力ボタン）
     function buildTopMamezuAboveTextHtml(photo, compact = false) {
       if (photo.mamezuDataUrl) {
         return `
@@ -3177,15 +4532,17 @@
     }
 
     function buildStandardRowCardHtml(photo, globalIdx, proj, options = {}) {
-      const { showPhase = false, memoRows = 4, mediaHeight = 'h-48' } = options;
+      const { showPhase = false, minMemoHeight = 'min-h-[72px]', mediaHeight = 'h-48' } = options;
+      const htmlBody = typeof photo.commentHtml === 'string'
+        ? photo.commentHtml
+        : escapeHtml(photo.comment || '').replace(/\n/g, '<br>');
+
       return `
         <div class="grid grid-cols-12 border border-slate-400 rounded-xs overflow-hidden bg-white flex-1">
-          <!-- 左：写真枠（6列） -->
           <div class="col-span-6 p-2 border-r border-slate-400 bg-slate-50/40">
             ${buildPhotoMediaBoxHtml(photo, globalIdx, proj, mediaHeight)}
           </div>
 
-          <!-- 右：メタ項目 ＋ 【文章テキストの上】豆図エリア ＋ 文章テキスト欄（6列） -->
           <div class="col-span-6 p-2 flex flex-col justify-between bg-white text-xs">
             <div>
               ${showPhase ? `
@@ -3220,17 +4577,16 @@
               </div>
             </div>
 
-            <!-- ★ ご要望：豆図アイコン・挿入欄を文章テキストの「上」に配置 -->
-            ${buildTopMamezuAboveTextHtml(photo, memoRows <= 3)}
+            ${buildTopMamezuAboveTextHtml(photo, minMemoHeight === 'min-h-[54px]')}
 
-            <!-- 文章テキスト入力欄（横幅100%で広々入力可能） -->
             <div class="flex-1 flex flex-col min-h-0">
-              <span class="text-[10px] text-slate-500 font-bold mb-0.5">撮影状況・記事メモ</span>
-              <textarea rows="${memoRows}"
-                        oninput="updatePhotoField('${photo.id}', 'comment', this.value)"
-                        placeholder="撮影状況・確認内容を入力..."
-                        class="no-print-textarea w-full flex-1 border border-slate-300 rounded p-1.5 text-xs text-slate-900 leading-snug outline-none focus:border-sky-500 resize-none">${escapeHtml(photo.comment || '')}</textarea>
-              <div class="print-only-memo hidden text-xs text-slate-900 leading-snug pt-0.5">${escapeHtml(photo.comment || '')}</div>
+              <span class="no-print text-[10px] text-slate-500 font-bold mb-0.5">撮影状況・記事メモ（文字を選んで色変更可）</span>
+              ${buildRichMemoToolbarHtml(photo.id)}
+              <div contenteditable="true"
+                   data-rich-memo="${photo.id}"
+                   data-placeholder="撮影状況・確認内容を入力..."
+                   oninput="syncRichMemoToState('${photo.id}', this)"
+                   class="w-full flex-1 ${minMemoHeight} border border-slate-300 rounded p-1.5 text-xs text-slate-900 leading-snug outline-none focus:border-sky-500 whitespace-pre-wrap break-words">${htmlBody}</div>
             </div>
           </div>
         </div>
@@ -3247,6 +4603,10 @@
         `;
       }
 
+      const htmlBody = typeof photo.commentHtml === 'string'
+        ? photo.commentHtml
+        : escapeHtml(photo.comment || '').replace(/\n/g, '<br>');
+
       return `
         <div class="border border-slate-400 rounded-xs p-2 bg-white flex flex-col justify-between gap-1">
           ${buildPhotoMediaBoxHtml(photo, globalIdx, proj, mediaHeight)}
@@ -3258,12 +4618,14 @@
               <input type="text" value="${escapeHtml(photo.location || '')}" oninput="updatePhotoField('${photo.id}', 'location', this.value)" placeholder="測点・箇所" class="flex-1 border-b border-slate-300 font-bold text-slate-900 outline-none" />
             </div>
 
-            <!-- 文章テキストの上に豆図アイコン・プレビュー配置 -->
             ${buildTopMamezuAboveTextHtml(photo, true)}
 
-            <textarea rows="2" oninput="updatePhotoField('${photo.id}', 'comment', this.value)" placeholder="メモ・記事..."
-                      class="no-print-textarea w-full border border-slate-300 rounded p-1 text-[11px] text-slate-900 leading-tight outline-none resize-none">${escapeHtml(photo.comment || '')}</textarea>
-            <div class="print-only-memo hidden text-[11px] text-slate-900 leading-tight">${escapeHtml(photo.comment || '')}</div>
+            ${buildRichMemoToolbarHtml(photo.id)}
+            <div contenteditable="true"
+                 data-rich-memo="${photo.id}"
+                 data-placeholder="メモ・記事..."
+                 oninput="syncRichMemoToState('${photo.id}', this)"
+                 class="w-full min-h-[38px] border border-slate-300 rounded p-1 text-[11px] text-slate-900 leading-tight outline-none focus:border-sky-500 whitespace-pre-wrap break-words">${htmlBody}</div>
           </div>
         </div>
       `;
@@ -3277,6 +4639,10 @@
           </div>
         `;
       }
+
+      const htmlBody = typeof photo.commentHtml === 'string'
+        ? photo.commentHtml
+        : escapeHtml(photo.comment || '').replace(/\n/g, '<br>');
 
       if (isSpread) {
         return `
@@ -3297,14 +4663,16 @@
                 </div>
               </div>
 
-              <!-- 文章テキストの上に豆図アイコン・プレビュー -->
               <div class="mt-1">
                 ${buildTopMamezuAboveTextHtml(photo, true)}
               </div>
 
-              <textarea rows="8" oninput="updatePhotoField('${photo.id}', 'comment', this.value)" placeholder="野帳メモ・実測値・記事を入力..."
-                        class="no-print-textarea w-full flex-1 bg-transparent text-xs text-slate-900 leading-6 outline-none resize-none">${escapeHtml(photo.comment || '')}</textarea>
-              <div class="print-only-memo hidden text-xs text-slate-900 leading-6 flex-1">${escapeHtml(photo.comment || '')}</div>
+              ${buildRichMemoToolbarHtml(photo.id)}
+              <div contenteditable="true"
+                   data-rich-memo="${photo.id}"
+                   data-placeholder="野帳メモ・実測値・記事を入力..."
+                   oninput="syncRichMemoToState('${photo.id}', this)"
+                   class="w-full flex-1 bg-transparent text-xs text-slate-900 leading-6 outline-none whitespace-pre-wrap break-words">${htmlBody}</div>
             </div>
           </div>
         `;
@@ -3321,9 +4689,12 @@
               <input type="text" value="${escapeHtml(photo.location || '')}" oninput="updatePhotoField('${photo.id}', 'location', this.value)" placeholder="測点" class="border-b border-emerald-500 bg-transparent font-bold outline-none" />
             </div>
             ${buildTopMamezuAboveTextHtml(photo, true)}
-            <textarea rows="4" oninput="updatePhotoField('${photo.id}', 'comment', this.value)" placeholder="野帳メモ..."
-                      class="no-print-textarea w-full flex-1 bg-transparent text-[11px] text-slate-900 leading-5 outline-none resize-none">${escapeHtml(photo.comment || '')}</textarea>
-            <div class="print-only-memo hidden text-[11px] text-slate-900 leading-5">${escapeHtml(photo.comment || '')}</div>
+            ${buildRichMemoToolbarHtml(photo.id)}
+            <div contenteditable="true"
+                 data-rich-memo="${photo.id}"
+                 data-placeholder="野帳メモ..."
+                 oninput="syncRichMemoToState('${photo.id}', this)"
+                 class="w-full flex-1 bg-transparent text-[11px] text-slate-900 leading-5 outline-none whitespace-pre-wrap break-words">${htmlBody}</div>
           </div>
         </div>
       `;
@@ -3390,7 +4761,7 @@
 
         let bodyHtml = '';
         if (pageItems.length === 0) {
-          bodyHtml = `<div class="flex-1 border-2 border-dashed border-slate-300 rounded-xl flex items-center justify-center text-slate-400 text-xs font-bold">写真枠がありません。「＋ 自由写真枠」または「📁 一括読込」から追加してください。</div>`;
+          bodyHtml = `<div class="flex-1 border-2 border-dashed border-slate-300 rounded-xl flex items-center justify-center text-slate-400 text-xs font-bold">写真枠がありません。「📸 カメラ撮影」「＋ 自由写真枠」「📁 一括読込」から追加してください。</div>`;
         } else if (['3rows', '4rows', 'public_3step'].includes(tpl)) {
           const isPublic = tpl === 'public_3step';
           const is4 = tpl === '4rows';
@@ -3398,14 +4769,14 @@
             const gIdx = proj.photos.findIndex(x => x.id === item.id);
             return buildStandardRowCardHtml(item, gIdx, proj, {
               showPhase: isPublic,
-              memoRows: is4 ? 3 : 4,
+              minMemoHeight: is4 ? 'min-h-[54px]' : 'min-h-[72px]',
               mediaHeight: is4 ? 'h-36' : 'h-48'
             });
           }).join('')}</div>`;
         } else if (tpl === '2grid_h') {
           bodyHtml = `<div class="flex-1 flex flex-col gap-2">${pageItems.map(item => {
             const gIdx = proj.photos.findIndex(x => x.id === item.id);
-            return buildStandardRowCardHtml(item, gIdx, proj, { showPhase: false, memoRows: 3, mediaHeight: 'h-36' });
+            return buildStandardRowCardHtml(item, gIdx, proj, { showPhase: false, minMemoHeight: 'min-h-[54px]', mediaHeight: 'h-36' });
           }).join('')}</div>`;
         } else if (['6grid', 'before_after', '4grid', '4grid_h'].includes(tpl)) {
           const colsCls = tpl === '6grid' && proj.paperFormat.startsWith('A3') ? 'grid-cols-3' : 'grid-cols-2';
@@ -3460,7 +4831,7 @@
       renderLedgerPages();
     }
 
-    // ==================== JSON / Discord / 外部アプリ連携 ====================
+    // ==================== JSON / Discord PDF+JSON送信（通信回復時自動再送対応） / 外部アプリ連携 ====================
     function openDataModal() { openModal('modal-data'); }
     function openDiscordModal() {
       const inp = document.getElementById('ledger-webhook-input');
@@ -3521,35 +4892,144 @@
 
     function saveWebhookOnly() {
       appState.discordWebhookUrl = (document.getElementById('ledger-webhook-input')?.value || '').trim();
-      persistState();
+      persistState(true);
       closeModal('modal-discord');
-      showToast('Discord Webhook URLを保存しました');
+      showToast('Discord Webhook URLを保存しました（一時保存・削除時の自動送信にも使われます）');
+    }
+
+    async function updateLedgerOutboxBadge() {
+      const badge = document.getElementById('ledger-outbox-badge');
+      if (!badge) return;
+      const list = await LedgerDB.getAllRecords('outbox');
+      if (list.length > 0) {
+        badge.textContent = `⏳ 送信待機 ${list.length}件`;
+        badge.classList.remove('hidden');
+      } else {
+        badge.classList.add('hidden');
+      }
+    }
+
+    async function postLedgerRecordToDiscord(rec) {
+      const fd = new FormData();
+      fd.append('payload_json', JSON.stringify({ content: rec.content }));
+      let fileIdx = 0;
+      if (rec.pdfBlob) {
+        fd.append(`file${fileIdx++}`, rec.pdfBlob, rec.pdfFileName || `ledger_${Date.now()}.pdf`);
+      }
+      if (rec.jsonText) {
+        fd.append(`file${fileIdx++}`, new Blob([rec.jsonText], { type: 'application/json' }), rec.jsonFileName || `ledger_${Date.now()}.json`);
+      }
+      const res = await fetch(rec.webhookUrl, { method: 'POST', body: fd });
+      return res.ok;
+    }
+
+    async function enqueueOrSendLedgerDiscordRecord(outboxRecord, sentToastMsg, queuedToastMsg) {
+      if (!navigator.onLine) {
+        await LedgerDB.putRecord('outbox', outboxRecord);
+        await updateLedgerOutboxBadge();
+        showToast(queuedToastMsg);
+        return false;
+      }
+
+      try {
+        const ok = await postLedgerRecordToDiscord(outboxRecord);
+        if (ok) {
+          showToast(sentToastMsg);
+          return true;
+        }
+      } catch (_) {}
+
+      await LedgerDB.putRecord('outbox', outboxRecord);
+      await updateLedgerOutboxBadge();
+      showToast(queuedToastMsg);
+      return false;
+    }
+
+    let isFlushingLedgerOutbox = false;
+    async function flushLedgerOutboxQueue(isSilent = false) {
+      if (isFlushingLedgerOutbox || !navigator.onLine) return;
+      const queue = await LedgerDB.getAllRecords('outbox');
+      if (!queue.length) {
+        await updateLedgerOutboxBadge();
+        return;
+      }
+      isFlushingLedgerOutbox = true;
+      queue.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+      let sent = 0;
+      for (const item of queue) {
+        try {
+          const ok = await postLedgerRecordToDiscord(item);
+          if (ok) {
+            await LedgerDB.deleteRecord('outbox', item.id);
+            sent++;
+          }
+        } catch (_) {
+          break;
+        }
+      }
+      isFlushingLedgerOutbox = false;
+      await updateLedgerOutboxBadge();
+      if (sent > 0 && !isSilent) {
+        showToast(`✅ 通信回復：待機していたPDF＋JSON送信 ${sent}件 をDiscordへ自動送信しました！`);
+      }
     }
 
     async function sendLedgerToDiscord() {
       const url = (document.getElementById('ledger-webhook-input')?.value || '').trim();
-      const msg = (document.getElementById('ledger-discord-msg')?.value || '').trim() || '工事写真台帳データを共有します。';
+      const msg = (document.getElementById('ledger-discord-msg')?.value || '').trim() || '本日の工事写真台帳（PDF）を共有します。';
+      const attachPdf = document.getElementById('chk-discord-attach-pdf')?.checked !== false;
+      const attachJson = document.getElementById('chk-discord-attach-json')?.checked !== false;
+
       appState.discordWebhookUrl = url;
-      persistState();
-      closeModal('modal-discord');
+      await persistState(true);
 
       if (!url) {
+        closeModal('modal-discord');
         showToast('Webhook URL未設定のため、ローカル保存のみ完了しました');
         return;
       }
 
-      const proj = getCurrentProject();
-      const lines = proj.photos.map((p, i) => `No.${i + 1} [${p.workType || '-'}] ${p.location || '-'} : ${p.comment || ''}`).join('\n');
-      const fd = new FormData();
-      fd.append('payload_json', JSON.stringify({ content: `📷 **${proj.projectName}**\n${msg}\n\`\`\`\n${lines.slice(0, 1500)}\n\`\`\`` }));
-      fd.append('file0', new Blob([JSON.stringify(proj, null, 2)], { type: 'application/json' }), `ledger_${Date.now()}.json`);
+      const sendBtn = document.getElementById('btn-execute-discord-pdf-send');
+      if (sendBtn) {
+        sendBtn.disabled = true;
+        sendBtn.textContent = '⏳ 台帳PDF・JSONを生成・送信中...';
+      }
 
       try {
-        const res = await fetch(url, { method: 'POST', body: fd });
-        if (res.ok) showToast('Discordへ台帳サマリー＆JSONを送信しました');
-        else showToast('Discord送信に失敗しました');
-      } catch (_) {
-        showToast('通信エラーによりDiscord送信できませんでした');
+        const proj = getCurrentProject();
+        const ts = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
+        const safeName = String(proj.projectName || 'construction_ledger').replace(/[\\/:*?"<>|\s]+/g, '_').slice(0, 28);
+        const lines = proj.photos.map((p, i) => `No.${i + 1} [${p.workType || '-'}] ${p.location || '-'} : ${p.comment || ''}`).join('\n');
+
+        let pdfBlob = null;
+        if (attachPdf) {
+          pdfBlob = await generateLedgerPdfBlobForDiscordOrDownload(9.2 * 1024 * 1024);
+        }
+
+        const outboxRecord = {
+          id: `outbox_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`,
+          webhookUrl: url,
+          content: `📷 **${proj.projectName}**（${proj.photos.length}枚）\n${msg}\n\`\`\`\n${lines.slice(0, 1400)}\n\`\`\``,
+          pdfBlob,
+          pdfFileName: `${safeName}_${ts}.pdf`,
+          jsonText: attachJson ? JSON.stringify(proj, null, 2) : null,
+          jsonFileName: `${safeName}_${ts}.json`,
+          createdAt: Date.now()
+        };
+
+        closeModal('modal-discord');
+        await enqueueOrSendLedgerDiscordRecord(
+          outboxRecord,
+          '✅ 台帳PDF＋JSONをDiscordへ送信しました！',
+          '⏳ オフラインのため台帳PDF＋JSONを送信待機キューへ一時保存しました（通信回復時に自動送信）'
+        );
+      } catch (err) {
+        showToast(`❌ PDF生成・送信エラー: ${err.message}`);
+      } finally {
+        if (sendBtn) {
+          sendBtn.disabled = false;
+          sendBtn.textContent = '📤 台帳PDF＋JSONを生成してDiscordへ送信';
+        }
       }
     }
 
@@ -3578,6 +5058,10 @@
         renderAll();
         showToast(`図面メモから ${msg.pins.length} 件のピンを取り込みました`);
       }
+    });
+
+    window.addEventListener('online', () => {
+      flushLedgerOutboxQueue(false);
     });
 
     document.addEventListener('DOMContentLoaded', async () => {
@@ -3609,7 +5093,13 @@
         }
       }
 
+      await purgeExpiredDeletedArchive();
       renderAll();
+      await updateTempDraftBadge();
+      await updateLedgerOutboxBadge();
+      if (navigator.onLine) {
+        flushLedgerOutboxQueue(true);
+      }
     });
   </script>
 </body>
