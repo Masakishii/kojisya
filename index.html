@@ -524,6 +524,32 @@
     </div>
   </div>
 
+  <!-- ==================== モーダルM-MZ-IN：📥 野帳・クラウド共有豆図の取り込み（入力）モーダル ==================== -->
+  <div id="modal-ledger-mamezu-import" class="no-print hidden fixed inset-0 bg-black/80 backdrop-blur-xs z-50 items-center justify-center p-2 sm:p-4">
+    <div class="bg-slate-900 border border-cyan-600/80 text-white rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl text-xs">
+      <div class="px-4 py-3 bg-cyan-950 border-b border-cyan-800 flex items-center justify-between shrink-0">
+        <h2 id="ledger-mz-import-title" class="font-extrabold text-sm flex items-center gap-1.5">
+          <span>📥</span> 野帳システムから豆図を入力（クラウド ＆ ローカル共有プール）
+        </h2>
+        <button onclick="closeModal('modal-ledger-mamezu-import')" class="text-slate-400 hover:text-white text-lg px-2 cursor-pointer">✕</button>
+      </div>
+
+      <div class="px-4 py-2.5 bg-slate-950 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2 shrink-0 text-[11px]">
+        <span id="ledger-mz-import-conn-info" class="text-cyan-200 font-bold">読み込み中...</span>
+        <div class="flex items-center gap-1.5">
+          <button onclick="closeModal('modal-ledger-mamezu-import'); openCloudSyncModal();" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg font-bold text-amber-200 cursor-pointer">
+            ⚙️ URL・現場キー設定
+          </button>
+          <button onclick="refreshLedgerMamezuImportList()" class="px-2.5 py-1 bg-cyan-700 hover:bg-cyan-600 rounded-lg font-extrabold text-white cursor-pointer">
+            🔄 最新読込
+          </button>
+        </div>
+      </div>
+
+      <div id="ledger-mz-import-grid" class="p-3 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 gap-2.5 flex-1"></div>
+    </div>
+  </div>
+
   <!-- ==================== モーダルA：📂 現場・台帳プロジェクト切替 ＆ 新規作成モーダル ==================== -->
   <div id="modal-projects" class="no-print hidden fixed inset-0 bg-black/80 backdrop-blur-xs z-50 items-center justify-center p-3">
     <div class="bg-slate-900 border border-amber-600/70 text-white rounded-2xl w-full max-w-lg max-h-[88vh] flex flex-col overflow-hidden shadow-2xl text-xs">
@@ -725,7 +751,6 @@
       </div>
 
       <div class="p-4 overflow-y-auto space-y-3 flex-1">
-        <!-- 送信先URL設定状態 ＆ 一括設定画面へのショートカット -->
         <div class="p-3 rounded-xl bg-slate-950 border border-slate-700 space-y-2">
           <div class="flex items-center justify-between gap-2">
             <span class="font-extrabold text-slate-200">現在のDiscord送信先設定</span>
@@ -1459,7 +1484,7 @@
       const photo = proj.photos.find(p => p.id === photoId);
       if (!photo) return;
       if (!photo.mamezuDataUrl) {
-        showToast('先に「📐 豆図」から豆図を作成してください');
+        showToast('先に「📐 豆図を作成・挿入」から豆図を作成してください');
         openMamezuEditor(photoId, 'mamezu');
         return;
       }
@@ -1489,9 +1514,125 @@
         photo.cloudMamezuMediaId = uploadedMz.media_id;
         photo.cloudMamezuUrl = uploadedMz.storage_url;
         persistState();
-        showToast('✅ 豆図をクラウド経由で野帳へ出力しました！（野帳の「☁️ 共有写真プール」から貼り付けられます）');
+        showToast('✅ 豆図をクラウド経由で野帳へ出力しました！（野帳の「🔄 豆図やりとり」から取り込めます）');
       } catch (err) {
         showToast(`❌ クラウド送信エラー: ${err.message}`);
+      }
+    }
+
+    // ==================== 📥 野帳・クラウド共有豆図の取り込み（入力）モーダル処理 ====================
+    let ledgerMamezuImportTargetPhotoId = null;
+
+    function openLedgerMamezuImportModal(photoId) {
+      ledgerMamezuImportTargetPhotoId = photoId;
+      const proj = getCurrentProject();
+      const idx = proj.photos.findIndex(p => p.id === photoId);
+      const titleEl = document.getElementById('ledger-mz-import-title');
+      if (titleEl) {
+        titleEl.innerHTML = `<span>📥</span> No.${idx + 1} の写真枠へ野帳の豆図を入力（クラウド ＆ ローカル共有）`;
+      }
+      openModal('modal-ledger-mamezu-import');
+      refreshLedgerMamezuImportList();
+    }
+
+    async function refreshLedgerMamezuImportList() {
+      const grid = document.getElementById('ledger-mz-import-grid');
+      const infoEl = document.getElementById('ledger-mz-import-conn-info');
+      if (!grid) return;
+
+      const rawUrl = (cloudSyncConfig.activeUrl || '').trim();
+      const siteKey = (cloudSyncConfig.activeSiteKey || '').trim();
+      if (infoEl) {
+        infoEl.textContent = (rawUrl && siteKey)
+          ? `🟢 クラウド接続中（現場キー: ${siteKey}）＋ 端末内ローカルブリッジ`
+          : '💾 ローカルブリッジ表示（他端末の野帳豆図を取得するには「⚙️ URL・現場キー設定」を登録）';
+      }
+
+      grid.innerHTML = `<div class="col-span-full text-center text-cyan-300 py-6">野帳・クラウドの豆図プールを読み込み中...</div>`;
+
+      const combinedItems = [];
+      if (rawUrl && siteKey) {
+        try {
+          const res = await fetch(`${rawUrl}/api/media`, { headers: { 'X-Site-Key': siteKey } });
+          const data = await res.json();
+          if (res.ok && data.ok && Array.isArray(data.media)) {
+            data.media.forEach(m => {
+              combinedItems.push({
+                id: m.media_id,
+                source: 'cloud',
+                mediaType: m.media_type,
+                title: `${m.media_type === 'mamezu' ? '📐 クラウド豆図' : '📷 共有写真'} ${m.taken_at || ''}`,
+                url: m.storage_url
+              });
+            });
+          }
+        } catch (_) {}
+      }
+
+      try {
+        const localBridge = JSON.parse(localStorage.getItem(STORAGE_KEY_MAMEZU_BRIDGE) || '[]');
+        localBridge.forEach(b => {
+          combinedItems.push({
+            id: b.id,
+            source: 'local',
+            mediaType: 'mamezu',
+            title: `💾 ${b.title || 'ローカル豆図'}`,
+            url: b.dataUrl
+          });
+        });
+      } catch (_) {}
+
+      combinedItems.sort((a, b) => (a.mediaType === 'mamezu' ? -1 : 1) - (b.mediaType === 'mamezu' ? -1 : 1));
+
+      if (combinedItems.length === 0) {
+        grid.innerHTML = `
+          <div class="col-span-full text-center text-slate-400 py-8 space-y-2">
+            <div>野帳システムから出力された豆図はまだありません。</div>
+            <div class="text-[10px]">野帳アプリの「🔄 豆図やりとり」から豆図を出力するとここに一覧表示されます。</div>
+          </div>
+        `;
+        return;
+      }
+
+      grid.innerHTML = combinedItems.map(it => `
+        <div class="bg-slate-950 border ${it.mediaType === 'mamezu' ? 'border-emerald-700/70' : 'border-slate-700'} rounded-xl p-2 flex flex-col gap-1.5">
+          <div class="h-24 bg-white rounded-lg overflow-hidden flex items-center justify-center border border-slate-600">
+            <img src="${escapeHtml(it.url)}" class="w-full h-full object-contain" />
+          </div>
+          <div class="text-[10px] font-bold ${it.mediaType === 'mamezu' ? 'text-emerald-300' : 'text-sky-300'} truncate">${escapeHtml(it.title)}</div>
+          <div class="grid grid-cols-2 gap-1 text-[10px] font-extrabold">
+            <button type="button" onclick="applyImportedMamezuToPhoto('${escapeHtml(it.url)}', '${escapeHtml(it.id)}', false)"
+                    class="py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg cursor-pointer">
+              ✅ そのまま挿入
+            </button>
+            <button type="button" onclick="applyImportedMamezuToPhoto('${escapeHtml(it.url)}', '${escapeHtml(it.id)}', true)"
+                    class="py-1.5 bg-cyan-700 hover:bg-cyan-600 text-white rounded-lg cursor-pointer">
+              ✏️ 編集して挿入
+            </button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function applyImportedMamezuToPhoto(srcUrl, mediaId = '', alsoOpenEditor = false) {
+      const proj = getCurrentProject();
+      const target = proj.photos.find(p => p.id === ledgerMamezuImportTargetPhotoId);
+      if (!target) return;
+
+      target.mamezuDataUrl = srcUrl;
+      if (mediaId && mediaId.startsWith('med_')) {
+        target.cloudMamezuMediaId = mediaId;
+        target.cloudMamezuUrl = srcUrl;
+      }
+      persistState();
+      closeModal('modal-ledger-mamezu-import');
+      renderAll();
+
+      if (alsoOpenEditor) {
+        openMamezuEditor(target.id, 'mamezu');
+        applyCloudImageIntoCurrentMamezu(srcUrl);
+      } else {
+        showToast('✅ 野帳の豆図を写真枠へ挿入しました');
       }
     }
 
@@ -1861,29 +2002,38 @@
       bar.classList.remove('hidden');
       const rawUrl = (cloudSyncConfig.activeUrl || '').trim();
       const siteKey = (cloudSyncConfig.activeSiteKey || '').trim();
-      if (!rawUrl || !siteKey) {
-        grid.innerHTML = `<div class="col-span-full text-slate-300 text-[10px] py-2">先にヘッダーの「⚙️ 接続・URL設定」から接続URLと現場キーを保存してください。</div>`;
+      grid.innerHTML = `<div class="col-span-full text-cyan-200 text-[10px] py-2">読込中...</div>`;
+
+      const items = [];
+      if (rawUrl && siteKey) {
+        try {
+          const res = await fetch(`${rawUrl}/api/media`, { headers: { 'X-Site-Key': siteKey } });
+          const data = await res.json();
+          if (res.ok && data.ok && Array.isArray(data.media)) {
+            data.media.forEach(m => {
+              items.push({ url: m.storage_url, label: m.media_type === 'mamezu' ? '📐 豆図' : '📷 写真' });
+            });
+          }
+        } catch (_) {}
+      }
+      try {
+        const localBridge = JSON.parse(localStorage.getItem(STORAGE_KEY_MAMEZU_BRIDGE) || '[]');
+        localBridge.forEach(b => {
+          items.push({ url: b.dataUrl, label: `💾 ${b.title || '豆図'}` });
+        });
+      } catch (_) {}
+
+      if (items.length === 0) {
+        grid.innerHTML = `<div class="col-span-full text-slate-300 text-[10px] py-2">野帳システムから共有された豆図・画像がまだありません。</div>`;
         return;
       }
-      grid.innerHTML = `<div class="col-span-full text-cyan-200 text-[10px] py-2">読込中...</div>`;
-      try {
-        const res = await fetch(`${rawUrl}/api/media`, { headers: { 'X-Site-Key': siteKey } });
-        const data = await res.json();
-        const list = data.media || [];
-        if (list.length === 0) {
-          grid.innerHTML = `<div class="col-span-full text-slate-300 text-[10px] py-2">この現場キーに共有された豆図・画像がまだありません。</div>`;
-          return;
-        }
-        grid.innerHTML = list.map(m => `
-          <button type="button" onclick="applyCloudImageIntoCurrentMamezu('${escapeHtml(m.storage_url)}')"
-                  class="bg-slate-900 hover:border-emerald-400 border border-slate-700 rounded p-1 flex flex-col items-center gap-1 cursor-pointer">
-            <img src="${escapeHtml(m.storage_url)}" class="w-full h-14 object-contain bg-white rounded-xs" />
-            <span class="text-[9px] font-bold text-emerald-200 truncate w-full text-center">${m.media_type === 'mamezu' ? '📐 豆図' : '📷 写真'}</span>
-          </button>
-        `).join('');
-      } catch (err) {
-        grid.innerHTML = `<div class="col-span-full text-rose-300 text-[10px] py-2">取得エラー: ${escapeHtml(err.message)}</div>`;
-      }
+      grid.innerHTML = items.map(m => `
+        <button type="button" onclick="applyCloudImageIntoCurrentMamezu('${escapeHtml(m.url)}')"
+                class="bg-slate-900 hover:border-emerald-400 border border-slate-700 rounded p-1 flex flex-col items-center gap-1 cursor-pointer">
+          <img src="${escapeHtml(m.url)}" class="w-full h-14 object-contain bg-white rounded-xs" />
+          <span class="text-[9px] font-bold text-emerald-200 truncate w-full text-center">${escapeHtml(m.label)}</span>
+        </button>
+      `).join('');
     }
 
     function applyCloudImageIntoCurrentMamezu(storageUrl) {
@@ -4960,13 +5110,18 @@
       if (photo.mamezuDataUrl) {
         return `
           <div class="mb-1.5 p-1.5 rounded border border-emerald-300 bg-emerald-50/50 flex flex-col gap-1">
-            <div class="no-print flex items-center justify-between gap-1 text-[10px]">
-              <button type="button" onclick="openMamezuEditor('${photo.id}', 'mamezu')" class="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-700 hover:bg-emerald-600 text-white rounded font-extrabold cursor-pointer">
-                <span>📐</span><span>豆図を編集</span>
-              </button>
+            <div class="no-print flex flex-wrap items-center justify-between gap-1 text-[10px]">
+              <div class="flex items-center gap-1">
+                <button type="button" onclick="openMamezuEditor('${photo.id}', 'mamezu')" class="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-700 hover:bg-emerald-600 text-white rounded font-extrabold cursor-pointer">
+                  <span>📐</span><span>編集</span>
+                </button>
+                <button type="button" onclick="openLedgerMamezuImportModal('${photo.id}')" class="inline-flex items-center gap-1 px-2 py-0.5 bg-sky-700 hover:bg-sky-600 text-white rounded font-extrabold cursor-pointer" title="野帳システムからクラウド共有された豆図に差し替えます">
+                  <span>📥</span><span>野帳から入力</span>
+                </button>
+              </div>
               <div class="flex items-center gap-1">
                 <button type="button" onclick="exportMamezuToFieldnote('${photo.id}')" class="inline-flex items-center gap-1 px-2 py-0.5 bg-cyan-700 hover:bg-cyan-600 text-white rounded font-extrabold cursor-pointer" title="この豆図を野帳システムへ出力・共有します">
-                  <span>☁️</span><span>野帳へ豆図出力</span>
+                  <span>☁️</span><span>野帳へ出力</span>
                 </button>
                 <button type="button" onclick="mzState.targetPhotoId='${photo.id}'; mzState.mode='mamezu'; removeMamezuFromPhoto();" class="px-1.5 py-0.5 bg-rose-100 hover:bg-rose-200 text-rose-800 rounded font-bold cursor-pointer" title="豆図解除">
                   ✕
@@ -4982,10 +5137,14 @@
 
       return `
         <div class="no-print mb-1 flex flex-wrap items-center justify-between gap-1 bg-slate-100/90 border border-slate-300 rounded px-2 py-1 text-[10px]">
-          <button type="button" onclick="openMamezuEditor('${photo.id}', 'mamezu')" class="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded font-extrabold shadow-xs cursor-pointer" title="文章テキストの上に豆図（施工位置・断面・略図）を作成して挿入します">
-            <span>📐</span><span>豆図を作成・挿入</span>
-          </button>
-          <span class="text-[9px] text-slate-500">※文章テキストの上に豆図を挿入できます</span>
+          <div class="flex flex-wrap items-center gap-1">
+            <button type="button" onclick="openMamezuEditor('${photo.id}', 'mamezu')" class="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded font-extrabold shadow-xs cursor-pointer" title="文章テキストの上に豆図（施工位置・断面・略図）を作成して挿入します">
+              <span>📐</span><span>豆図を作成・挿入</span>
+            </button>
+            <button type="button" onclick="openLedgerMamezuImportModal('${photo.id}')" class="inline-flex items-center gap-1 px-2 py-0.5 bg-sky-700 hover:bg-sky-600 text-white rounded font-extrabold shadow-xs cursor-pointer" title="野帳システムからクラウドへ出力された豆図を取り込みます">
+              <span>📥</span><span>野帳から豆図入力</span>
+            </button>
+          </div>
         </div>
       `;
     }
@@ -5372,9 +5531,12 @@
           <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg">
             <div class="px-3 py-2 bg-slate-800/80 flex items-center justify-between gap-2 text-xs">
               <span class="font-extrabold text-amber-300">No.${idx + 1} ${escapeHtml(photo.workType || '工種未設定')}</span>
-              <div class="flex items-center gap-1">
-                <button onclick="openMobileChalkboardPicker('${photo.id}')" class="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-600 text-white rounded-lg font-extrabold text-[11px] cursor-pointer">
-                  🟩 黒板載せ
+              <div class="flex flex-wrap items-center gap-1">
+                <button onclick="openMobileChalkboardPicker('${photo.id}')" class="px-2 py-1 bg-emerald-700 hover:bg-emerald-600 text-white rounded-lg font-extrabold text-[11px] cursor-pointer">
+                  🟩 黒板
+                </button>
+                <button onclick="openLedgerMamezuImportModal('${photo.id}')" class="px-2 py-1 bg-sky-700 hover:bg-sky-600 text-white rounded-lg font-extrabold text-[11px] cursor-pointer" title="野帳の豆図を取込">
+                  📥 豆図入力
                 </button>
                 <button onclick="openMamezuEditor('${photo.id}', 'photo')" class="px-2 py-1 bg-amber-700 hover:bg-amber-600 text-white rounded-lg font-bold text-[11px] cursor-pointer">
                   ✏️ 注釈
@@ -5394,6 +5556,16 @@
             </div>
 
             <div class="p-3 space-y-2 text-xs">
+              ${photo.mamezuDataUrl ? `
+                <div class="p-2 rounded-xl bg-slate-950 border border-emerald-700/70 flex items-center justify-between gap-2">
+                  <img src="${photo.mamezuDataUrl}" class="h-14 w-24 object-contain bg-white rounded border border-slate-600" />
+                  <div class="flex-1 flex flex-wrap gap-1 justify-end text-[10px] font-bold">
+                    <button onclick="openMamezuEditor('${photo.id}', 'mamezu')" class="px-2 py-1 bg-emerald-700 text-white rounded-lg cursor-pointer">📐 豆図編集</button>
+                    <button onclick="exportMamezuToFieldnote('${photo.id}')" class="px-2 py-1 bg-cyan-700 text-white rounded-lg cursor-pointer">☁️ 野帳出力</button>
+                  </div>
+                </div>
+              ` : ''}
+
               <div class="grid grid-cols-2 gap-2">
                 <label class="relative overflow-hidden py-2 bg-teal-700 hover:bg-teal-600 text-white rounded-xl font-bold text-center cursor-pointer">
                   <span>📸 この枠を撮影</span>
